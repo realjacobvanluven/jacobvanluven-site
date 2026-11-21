@@ -26,3 +26,6 @@ pnpm-debug.log*
 # original media (large; processed copies are committed elsewhere)
 assets-inbox/*
 !assets-inbox/README.md
+
+# media hand-off archives (unzipped into assets-inbox/)
+*.zip

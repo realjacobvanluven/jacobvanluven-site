@@ -1,0 +1,192 @@
+---
+/**
+ * Swipeable slide set. Native horizontal scroll + scroll-snap, so touch swiping, trackpads and
+ * keyboard scrolling work without JavaScript. A small script adds prev/next buttons and the
+ * "2 / 6" counter, and plays animated (video) slides only while visible and motion is allowed.
+ */
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+export type Slide =
+  | { type: 'image'; src: ImageMetadata; alt: string }
+  | { type: 'video'; src: string; alt: string };
+
+interface Props {
+  label: string;
+  slides: Slide[];
+  /** Load the first slide eagerly (only for a carousel near the top of the page). */
+  eager?: boolean;
+}
+
+const { label, slides, eager = false } = Astro.props;
+const sizes = '(min-width: 34rem) 30rem, calc(100vw - 2rem)';
+---
+
+<section class="carousel" aria-roledescription="carousel" aria-label={label} data-carousel>
+  <div class="track" tabindex="0" aria-label={`${label}: ${slides.length} slides, scroll or swipe sideways`}>
+    {
+      slides.map((slide, i) => (
+        <div class="slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${slides.length}`}>
+          {slide.type === 'image' ? (
+            <Image
+              src={slide.src}
+              alt={slide.alt}
+              widths={[360, 540, 720, 1080]}
+              {sizes}
+              loading={eager && i === 0 ? 'eager' : 'lazy'}
+            />
+          ) : (
+            <video src={slide.src} muted loop playsinline preload="metadata" aria-label={slide.alt} data-autoplay />
+          )}
+        </div>
+      ))
+    }
+  </div>
+  {
+    slides.length > 1 && (
+      <div class="controls" hidden data-controls>
+        <button type="button" data-prev aria-label={`Previous slide: ${label}`}>
+          ←
+        </button>
+        <span class="label counter" aria-live="polite" data-counter>
+          1 / {slides.length}
+        </span>
+        <button type="button" data-next aria-label={`Next slide: ${label}`}>
+          →
+        </button>
+      </div>
+    )
+  }
+</section>
+
+<style>
+  .carousel {
+    max-width: 30rem;
+  }
+
+  .track {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    border-radius: 8px;
+  }
+
+  .track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .slide {
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+
+  .slide :is(img, video) {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.6rem;
+  }
+
+  .controls[hidden] {
+    display: none;
+  }
+
+  .controls button {
+    min-width: 2.75rem;
+    min-height: 2.75rem; /* 44px touch target */
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text);
+    font-size: 1.125rem;
+    cursor: pointer;
+  }
+
+  .controls button:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .controls button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .counter {
+    margin: 0;
+  }
+</style>
+
+<script>
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-carousel]')) {
+    const track = root.querySelector<HTMLElement>('.track')!;
+    const slides = [...track.querySelectorAll<HTMLElement>('.slide')];
+    const controls = root.querySelector<HTMLElement>('[data-controls]');
+    const prev = root.querySelector<HTMLButtonElement>('[data-prev]');
+    const next = root.querySelector<HTMLButtonElement>('[data-next]');
+    const counter = root.querySelector<HTMLElement>('[data-counter]');
+    let current = 0;
+
+    const goTo = (i: number) => {
+      const target = slides[Math.max(0, Math.min(slides.length - 1, i))];
+      track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+    };
+
+    const update = () => {
+      if (counter) counter.textContent = `${current + 1} / ${slides.length}`;
+      if (prev) prev.disabled = current === 0;
+      if (next) next.disabled = current === slides.length - 1;
+    };
+
+    // Track which slide is mostly in view; play animated slides only while visible.
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const slide = entry.target as HTMLElement;
+          const video = slide.querySelector<HTMLVideoElement>('video[data-autoplay]');
+          if (entry.intersectionRatio >= 0.6) {
+            current = slides.indexOf(slide);
+            update();
+          }
+          if (video) {
+            if (entry.intersectionRatio >= 0.6 && !reduceMotion.matches) video.play().catch(() => {});
+            else video.pause();
+          }
+        }
+      },
+      { root: track, threshold: [0, 0.6] },
+    );
+    slides.forEach((s) => io.observe(s));
+
+    // With reduced motion, animated slides get controls instead of autoplay.
+    if (reduceMotion.matches) {
+      track.querySelectorAll<HTMLVideoElement>('video[data-autoplay]').forEach((v) => (v.controls = true));
+    }
+
+    prev?.addEventListener('click', () => goTo(current - 1));
+    next?.addEventListener('click', () => goTo(current + 1));
+    track.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') (e.preventDefault(), goTo(current + 1));
+      if (e.key === 'ArrowLeft') (e.preventDefault(), goTo(current - 1));
+    });
+
+    if (controls) controls.hidden = false;
+    update();
+  }
+</script>

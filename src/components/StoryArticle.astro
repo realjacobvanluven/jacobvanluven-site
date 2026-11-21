@@ -1,6 +1,7 @@
 ---
 import { render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import MediaItem from './MediaItem.astro';
 import { formatStoryDate } from '../lib/format';
 import type { Story } from '../lib/stories';
 
@@ -33,6 +34,16 @@ const sectionLabel = data.section === 'journalism' ? 'Journalism' : 'Comms';
         )
       }
     </p>
+    {data.credit && <p class="credit">{data.credit}</p>}
+    {
+      data.media.length > 0 && (
+        <div class="story-media">
+          {data.media.map((item) => (
+            <MediaItem {item} />
+          ))}
+        </div>
+      )
+    }
     <div class="prose">
       <Content />
     </div>
@@ -56,6 +67,19 @@ const sectionLabel = data.section === 'journalism' ? 'Journalism' : 'Comms';
   .byline {
     padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--border);
+  }
+
+  .credit {
+    color: var(--text-muted);
+    border-left: 2px solid var(--accent);
+    padding-left: 0.6rem;
+  }
+
+  .story-media {
+    display: grid;
+    gap: 1rem;
+    max-width: var(--measure);
+    margin: 1.5rem 0;
   }
 
   .original {

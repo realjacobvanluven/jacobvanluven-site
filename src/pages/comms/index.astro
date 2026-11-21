@@ -1,12 +1,178 @@
 ---
+import { getEntry, render } from 'astro:content';
+import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import StoryList from '../../components/StoryList.astro';
+import Carousel from '../../components/Carousel.astro';
+import { campaigns, shortVideoPoster } from '../../data/eps-campaigns';
+
+const shortVideos = await getEntry('stories', 'eps-short-videos');
+const preparedness = await getEntry('stories', 'eps-preparedness-series');
+if (!shortVideos || !preparedness) throw new Error('Missing EPS story entries');
+const { Content: PreparednessText } = await render(preparedness);
+const shortVideoUrl = shortVideos.data.externalUrl!;
 ---
 
 <BaseLayout
   title="Comms"
-  description="Communications work for the Emergency Planning Secretariat: the Preparedness Series, short videos and social media."
+  description="Social media campaigns, short videos and the Preparedness Series created for the Emergency Planning Secretariat."
 >
   <h1>Comms</h1>
-  <StoryList section="comms" />
+
+  <section aria-labelledby="eps-h">
+    <p class="label">Summer 2024 · Communications Intern</p>
+    <h2 id="eps-h">Emergency Planning Secretariat campaigns</h2>
+    <p class="intro">
+      <a href="https://www.emergencyplanningsecretariat.com/">The Emergency Planning Secretariat</a> supports 31 Mainland
+      Coast Salish communities in strengthening local and regional emergency planning and preparedness. After developing
+      a posting plan and schedule, I designed and executed a number of different social media campaigns featuring custom
+      images and strategically crafted messaging.
+    </p>
+    <p class="hint label">Swipe or use the arrows to page through each carousel.</p>
+
+    <div class="campaigns">
+      {
+        campaigns.map((c, i) => (
+          <article class="campaign" aria-labelledby={`${c.id}-h`}>
+            <h3 id={`${c.id}-h`}>{c.title}</h3>
+            <p class="campaign-desc">{c.description}</p>
+            <Carousel label={c.title} slides={c.slides} eager={i === 0} />
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="more" aria-labelledby="more-h">
+    <h2 id="more-h" class="visually-hidden">More EPS work</h2>
+
+    <article class="feature">
+      <a class="poster" href={shortVideoUrl}>
+        <Image
+          src={shortVideoPoster}
+          alt="Video thumbnail reading “How to make a 72-hour kit”, showing kit supplies laid out on a wooden floor."
+          widths={[200, 338]}
+          sizes="(min-width: 40rem) 12rem, 45vw"
+        />
+        <span class="play" aria-hidden="true">▶</span>
+        <span class="visually-hidden">Watch “How to make a 72-hour kit” on the EPS website</span>
+      </a>
+      <div>
+        <h3>{shortVideos.data.title}</h3>
+        <p>
+          As part of the social media plan, I developed numerous Tik Tok/reel-style videos that showed helpful emergency
+          preparedness tips. These videos were made for a social media audience who primarily interacted through mobile.
+        </p>
+        <p><a href={shortVideoUrl}>Watch “How to make a 72-hour kit” ↗</a></p>
+      </div>
+    </article>
+
+    <article class="feature text-only">
+      <div>
+        <h3>{preparedness.data.title}</h3>
+        <div class="prose"><PreparednessText /></div>
+      </div>
+    </article>
+  </section>
 </BaseLayout>
+
+<style>
+  .intro {
+    margin-bottom: 0.5rem;
+  }
+
+  .hint {
+    margin: 0 0 2rem;
+  }
+
+  .campaigns {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: 2.5rem 2rem;
+  }
+
+  .campaign {
+    min-width: 0;
+  }
+
+  .campaign h3 {
+    font-size: 1.25rem;
+    margin: 0;
+  }
+
+  .campaign-desc {
+    color: var(--text-muted);
+    margin: 0.35rem 0 0.9rem;
+    font-size: 0.9375rem;
+  }
+
+  .more {
+    margin-top: 4rem;
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .feature {
+    display: grid;
+    grid-template-columns: minmax(0, 12rem) 1fr;
+    gap: 1.5rem;
+    align-items: start;
+    padding: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .feature.text-only {
+    grid-template-columns: 1fr;
+  }
+
+  .feature h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+  }
+
+  .feature p {
+    margin: 0 0 0.75rem;
+  }
+
+  .poster {
+    position: relative;
+    display: block;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .poster img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .play {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 1.1rem;
+  }
+
+  .poster:hover .play {
+    background: var(--accent-soft);
+  }
+
+  @media (max-width: 30rem) {
+    .feature {
+      grid-template-columns: 1fr;
+    }
+
+    .poster {
+      max-width: 14rem;
+    }
+  }
+</style>

@@ -18,11 +18,6 @@ Thanks to recent online trends, the sport of running has never been more popular
 
 ## What's behind the rise?
 
-<figure class="media-placeholder" data-kind="image" data-file="run-clubs-vancouver/jogger-serpentine-greenway">
-  <p>Image placeholder: jogger on the Serpentine Greenway</p>
-  <figcaption>A jogger runs down the Serpentine Greenway in Surrey, B.C.</figcaption>
-</figure>
-
 The rise of run clubs and social running in Vancouver reflects a growing global trend. Digital platforms such as Strava, Instagram and Tik Tok have helped reshape the individualistic perception of running into a sport with a strong sense of community.
 
 What used to be known as a solitary sport has now evolved into a shared ritual driven by run clubs, group training, and post-workout coldbrews. Data from the popular running app, [Strava](https://press.strava.com/articles/strava-releases-annual-year-in-sport-trend?fbclid=PAZXh0bgNhZW0CMTEAAabpy9GXDWY9-WNN0IORasTIL15H7_zMBGCjigCkjcx56NOHBizjFXcNRI8_aem_KcggF1yJioEuKFWJK1f74w&%24web_only=true&_branch_match_id=987799096055605401&_branch_referrer=H4sIAAAAAAAAAwXB2w6CIAAA0L%2FpzcRmF9taU1NTk5pzw3pxgIhYGQPL6qFv75x2GKRem6YeFH5hY2RkiqWc3kR%2FNZk5AzN7UKyv9bYh9Cbqzcm9lC0gHLYXBPysCFwXE%2FlxonKHzo6BIATxMce6iA%2FWfL%2BsvpkX%2BZ3g%2FrWj7%2FkCHvee%2BHZhSWEeryrM7lVKOQ%2BtTyIewTMNUZJazdIeJz%2FFGqaU6HlF1GPUTG2CmrM%2F3zmESrAAAAA%3D), indicated that 58% of users made a friend at a run club, and also saw a 9% increase in marathons and ultramarathons logged in 2024.
@@ -54,11 +49,6 @@ As running becomes a more social activity, these benefits are heightened. The en
 But with more participants than ever, a new reality of running races and events is taking form in Vancouver and cities across the world.
 
 ## The new landscape of racing
-
-<figure class="media-placeholder" data-kind="audio" data-file="run-clubs-vancouver/sounds-of-racing">
-  <p>Audio placeholder: “The sounds of racing” (0:07)</p>
-  <figcaption>The sounds of racing</figcaption>
-</figure>
 
 While recent social media trends are inspiring more to be active and healthy, the sport is also experiencing growing pains as a result of its newfound popularity.
 

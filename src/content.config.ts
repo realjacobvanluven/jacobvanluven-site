@@ -55,6 +55,28 @@ const stories = defineCollection({
        * Not rendered. Jacob decides which version to keep.
        */
       alternateText: z.array(z.object({ source: z.string(), text: z.string() })).default([]),
+      /** Who did what, when Jacob's role was part of a piece (e.g. "Story by X · Promo by Jacob Van Luven"). */
+      credit: z.string().optional(),
+      /**
+       * Media shown with the piece. Images live in src/assets (optimized by Astro); video and audio are
+       * already compressed and live in public/media (reference them as "/media/...").
+       */
+      media: z
+        .array(
+          z.discriminatedUnion('type', [
+            z.object({ type: z.literal('image'), src: image(), alt: z.string() }),
+            z.object({
+              type: z.literal('video'),
+              src: z.string().startsWith('/media/'),
+              /** Accessible description of what the video shows. */
+              label: z.string(),
+              /** CSS aspect-ratio, e.g. "9 / 16" for vertical reels. */
+              aspect: z.string().default('9 / 16'),
+            }),
+            z.object({ type: z.literal('audio'), src: z.string().startsWith('/media/'), label: z.string() }),
+          ]),
+        )
+        .default([]),
       /** YouTube video ID for lazily embedded videos. */
       youtubeId: z.string().optional(),
       image: image().optional(),

@@ -102,7 +102,27 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 - BCI work is confidential: describe roles and skills, never invent or show deliverables.
 - Do not invent facts, metrics, quotes or testimonials. If copy needs something we don't have, leave a clearly marked TODO.
 
-## Content to migrate from Wix (keep ALL of it for now; Jacob will trim later)
+## Content approach (decided 2026-11-21; supersedes "keep ALL of it" below)
+The Wix migration is done (text copied verbatim, 2026-11-21). The site is now **curated, not an archive**:
+- **/journalism** is an overview of the *types* of work (deadline news, features, audio, video, data visualization,
+  social). Each type has a one-line description and **at most two featured examples**, configured in
+  `src/data/journalism.ts` (story ids). Only featured pieces stay in `src/content/stories/`.
+- **/comms** leads with the EPS social campaigns as swipeable carousels (touch on mobile, arrows + keyboard on desktop),
+  configured in `src/data/eps-campaigns.ts`; then the Short Videos link (72-hour-kit thumbnail as its poster) and the
+  Preparedness Series.
+- **Everything else is archived, never deleted**, in `content-archive/` (unpublished stories, the old Wix
+  Home/About/Contact text, the old Wix media checklist). To publish an archived piece, move it back into
+  `src/content/stories/` and feature it.
+- **Media: only what Jacob curates into `/assets-inbox`** (see its README). Don't pull media from Wix or elsewhere.
+  Images are copied to `src/assets/` and always rendered through Astro's image pipeline (`<Image>` / `getImage`, WebP,
+  responsive widths); originals must not ship. Video and audio are pre-compressed and go in `public/media/` as-is.
+- **Credit honestly.** When Jacob made the promo for someone else's story, name the reporter shown on the piece and
+  state his role, e.g. "Story by reporter Suneet Gill · Social video promo by Jacob Van Luven" (`credit` field).
+- **"Just for fun"** (on /about): personal side projects, framed as made for fun (e.g. Fight Night cards designed while
+  playing an MMA simulator game). Images go in `src/assets/side-projects/<project>/`; the block hides when empty.
+- EPS role is "Communications Intern" everywhere (Wix said "Communications Student").
+
+## Content migrated from Wix (historical; see Content approach above)
 - Home: https://jacobvanluven.wixsite.com/vanluvenjacob
 - JRNL 3180 Final Story: /jrnl-3180-final-story
 - Recent Work (BCI + EPS + JRNL 4900 deadline stories): /recent-work
@@ -115,7 +135,7 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 - Contact: /contact
 - External stories: Medium (@jacobvanluven) — homeless-giving story (Feb 2021), Whistler snowboarder (Jan 2021);
   LangaraVoice — Vancouver urban coyotes (Dec 2020).
-Text can be pulled from the live pages. Images, audio and video come from Jacob's original files in `/assets-inbox`
+Text was pulled from the live pages. Images, audio and video come only from Jacob's curated files in `/assets-inbox`
 (not committed if large). Long videos go on YouTube (unlisted is fine) and are embedded lazily.
 
 ## Quality bar

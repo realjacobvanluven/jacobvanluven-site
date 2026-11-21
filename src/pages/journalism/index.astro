@@ -1,9 +1,93 @@
 ---
+import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import StoryList from '../../components/StoryList.astro';
+import StoryCard from '../../components/StoryCard.astro';
+import { workTypes } from '../../data/journalism';
+
+const stories = await getCollection('stories', (s) => !s.data.draft && s.data.section === 'journalism');
+const byId = new Map(stories.map((s) => [s.id, s]));
+
+const sections = workTypes.map((type) => ({
+  ...type,
+  stories: type.featured.slice(0, 2).map((id) => {
+    const story = byId.get(id);
+    if (!story) throw new Error(`src/data/journalism.ts features "${id}", but no published story has that id.`);
+    return story;
+  }),
+}));
 ---
 
-<BaseLayout title="Journalism" description="Written stories, audio, video and data visualizations by Jacob Van Luven.">
+<BaseLayout
+  title="Journalism"
+  description="The kinds of journalism Jacob Van Luven has done, from deadline news and features to audio, video, data visualization and social, with a featured example of each."
+>
   <h1>Journalism</h1>
-  <StoryList section="journalism" />
+  <nav class="jump" aria-label="Types of work">
+    <ul>
+      {sections.map((s) => <li><a href={`#${s.id}`}>{s.label}</a></li>)}
+    </ul>
+  </nav>
+
+  {
+    sections.map((s) => (
+      <section class="type" id={s.id} aria-labelledby={`${s.id}-h`}>
+        <h2 id={`${s.id}-h`}>{s.label}</h2>
+        <p class="type-desc">{s.description}</p>
+        <div class="cards">
+          {s.stories.map((story) => (
+            <StoryCard {story} />
+          ))}
+        </div>
+      </section>
+    ))
+  }
 </BaseLayout>
+
+<style>
+  .jump ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .jump a {
+    display: inline-block;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .jump a:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .type {
+    padding-top: 2.5rem;
+    margin-top: 2.5rem;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 1rem;
+  }
+
+  .type h2 {
+    margin-top: 0;
+  }
+
+  .type-desc {
+    color: var(--text-muted);
+    margin: 0 0 1.5rem;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: 1.25rem;
+    align-items: start;
+  }
+</style>

@@ -1,0 +1,112 @@
+---
+import MediaItem from './MediaItem.astro';
+import { formatStoryDate } from '../lib/format';
+import { hasBody, storyHref, type Story } from '../lib/stories';
+
+interface Props {
+  story: Story;
+  headingLevel?: 'h3' | 'h4';
+}
+
+const { story, headingLevel: H = 'h3' } = Astro.props;
+const { data } = story;
+const href = storyHref(story);
+const external = !hasBody(story) && Boolean(data.externalUrl);
+---
+
+<article class="card">
+  {
+    data.media.length > 0 && (
+      <div class="card-media">
+        {data.media.map((item) => (
+          <MediaItem {item} sizes="(min-width: 52rem) 22rem, calc(100vw - 2rem)" />
+        ))}
+      </div>
+    )
+  }
+  <div class="card-text">
+    {
+      (data.date || data.outlet) && (
+        <p class="label">
+          {data.date && (
+            <time datetime={data.date.toISOString().slice(0, 10)}>{formatStoryDate(data.date, data.datePrecision)}</time>
+          )}
+          {data.date && data.outlet && ' · '}
+          {data.outlet}
+        </p>
+      )
+    }
+    <H class="card-title">
+      {
+        href ? (
+          <a href={href}>
+            {data.title}
+            {external && <span aria-hidden="true"> ↗</span>}
+            {external && <span class="visually-hidden"> (external link)</span>}
+          </a>
+        ) : (
+          data.title
+        )
+      }
+    </H>
+    {data.description && <p class="card-desc">{data.description}</p>}
+    {data.credit && <p class="credit">{data.credit}</p>}
+  </div>
+</article>
+
+<style>
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 0;
+  }
+
+  .card-media :global(.media-video) {
+    max-height: 30rem;
+    margin-inline: auto;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .card-media :global(.media-image img) {
+    max-height: 30rem;
+    object-fit: contain;
+  }
+
+  .card-text > * {
+    margin: 0;
+  }
+
+  .card-title {
+    font-size: 1.25rem;
+    line-height: 1.25;
+    margin-top: 0.35rem;
+  }
+
+  .card-title a {
+    color: var(--text);
+    text-decoration-color: var(--accent);
+  }
+
+  .card-title a:hover {
+    color: var(--accent);
+  }
+
+  .card-desc {
+    margin-top: 0.5rem;
+    color: var(--text-muted);
+  }
+
+  .credit {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    border-left: 2px solid var(--accent);
+    padding-left: 0.6rem;
+  }
+</style>

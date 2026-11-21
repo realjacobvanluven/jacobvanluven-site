@@ -1,5 +1,15 @@
 ---
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+// "Just for fun": Fight Night cards. Rendered only once the images exist in
+// src/assets/side-projects/fight-night/ (copied from assets-inbox/side-projects/fight-night/).
+const fightNight = Object.entries(
+  import.meta.glob<{ default: ImageMetadata }>('../assets/side-projects/fight-night/*.{png,jpg,jpeg,webp}', { eager: true }),
+)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([, mod]) => mod.default);
 ---
 
 <BaseLayout title="About" description="About Jacob Van Luven: journalist, communicator and builder.">
@@ -9,6 +19,52 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <li>Journalism and Communications, Kwantlen Polytechnic University (Surrey, B.C.)</li>
     <li>Certificate in Journalism, Langara College</li>
   </ul>
-  <p class="todo">TODO: bio and interests (fitness, sports, food). Migrate from the Wix About Me page.</p>
+  <p class="todo">TODO: bio and interests (fitness, sports, food). Old Wix text is in content-archive/.</p>
   <p class="todo">TODO: resume PDF download.</p>
+
+  {
+    fightNight.length > 0 && (
+      <section class="fun" aria-labelledby="fun-h">
+        <h2 id="fun-h">Just for fun</h2>
+        <p>
+          Fight Night cards: personal design work I made for fun while playing an MMA simulator game.
+        </p>
+        <div class="fun-grid">
+          {fightNight.map((src, i) => (
+            <Image
+              src={src}
+              alt={`Fight Night event card design ${i + 1} of ${fightNight.length}, made for an MMA simulator game.`}
+              widths={[320, 560, 900]}
+              sizes="(min-width: 40rem) 18rem, calc(50vw - 1.5rem)"
+              loading="lazy"
+            />
+          ))}
+        </div>
+      </section>
+    )
+  }
 </BaseLayout>
+
+<style>
+  .fun {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .fun h2 {
+    margin-top: 0;
+  }
+
+  .fun-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 18rem));
+    gap: 1rem;
+  }
+
+  .fun-grid img {
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+  }
+</style>

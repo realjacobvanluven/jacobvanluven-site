@@ -4,11 +4,11 @@ date: "2024-02-06"
 section: "journalism"
 format: "audio"
 wixPage: "/shoplifting-surge"
+media:
+  - type: audio
+    src: /media/journalism/audio/jrnl2240-feature-story.mp3
+    label: "Concussions in Hockey, an audio feature by Jacob Van Luven (6:20)"
+# Audio file from assets-inbox/journalism/audio/jrnl2240-feature-story.mp3 (6:20, matches the Wix "Concussions in Hockey" track length). TODO(Jacob): confirm.
 ---
-
-<figure class="media-placeholder" data-kind="audio" data-file="concussions-in-hockey/audio">
-  <p>Audio placeholder: “Concussions in Hockey” (6:20)</p>
-  <figcaption>Concussions in Hockey · Jacob Van Luven</figcaption>
-</figure>
 
 Made for JRNL 2240

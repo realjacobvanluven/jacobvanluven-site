@@ -1,5 +1,9 @@
 ---
 title: "Short Videos"
+media:
+  - type: image
+    src: ../../assets/eps/go-bag/03-72-hour-kit-video-thumbnail.webp
+    alt: "Video thumbnail reading 'How to make a 72-hour kit', showing kit supplies laid out on a wooden floor."
 # TODO(Jacob) date: Wix gives none (EPS role was Jun–Aug 2024).
 section: "comms"
 format: "video"
@@ -9,14 +13,6 @@ wixPage: "/eps (also on /recent-work)"
 # Note Wix "Click here to view" URL was malformed (two URLs concatenated); repaired to the single EPS video URL.
 ---
 
-<figure class="media-placeholder" data-kind="image" data-file="eps-short-videos/thumbnail">
-  <p>Image placeholder: Short Videos card image (width_338.webp)</p>
-</figure>
-
 As part of the social media plan, I developed numerous Tik Tok/reel-style videos that showed helpful emergency preparedness tips. These videos were made for a social media audience who primarily interacted through mobile.
 
 [Click here to view](https://www.emergencyplanningsecretariat.com/?wix-vod-comp-id=comp-m1qnko4v)
-
-<figure class="media-placeholder" data-kind="video" data-file="eps-short-videos/">
-  <p>Video placeholder: the TikTok/reel-style EPS videos (one file each; any you want shown)</p>
-</figure>
