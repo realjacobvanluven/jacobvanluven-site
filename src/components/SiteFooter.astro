@@ -1,0 +1,67 @@
+---
+import { site } from '../data/site';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="links">
+    <p>© {year} {site.name}</p>
+    <ul>
+      <li><a href={`mailto:${site.email}`}>Email</a></li>
+      <li><a href={site.linkedin}>LinkedIn</a></li>
+      <li><a href={site.github}>GitHub</a></li>
+    </ul>
+  </div>
+  <p class="attribution">
+    Skyline data: contains information licensed under the
+    <a href="https://opendata.vancouver.ca/pages/licence/">Open Government Licence – Vancouver</a>. Map data ©
+    <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, available under the
+    <a href="https://opendatacommons.org/licenses/odbl/">Open Database License (ODbL)</a>.
+  </p>
+</footer>
+
+<style>
+  .site-footer {
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2rem var(--gutter) 2.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem 2rem;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  ul {
+    display: flex;
+    gap: 1.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .attribution {
+    margin-top: 1rem;
+    font-size: 0.8125rem;
+    max-width: 80ch;
+  }
+
+  .attribution a {
+    color: var(--text-muted);
+  }
+
+  .attribution a:hover {
+    color: var(--accent);
+  }
+</style>

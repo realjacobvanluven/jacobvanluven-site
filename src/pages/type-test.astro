@@ -1,0 +1,188 @@
+---
+// TEMPORARY: font comparison page. Delete after Jacob picks a pairing
+// (and uninstall the unused display font package).
+import '@fontsource-variable/big-shoulders-display';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const pairings = [
+  { id: 'a', name: 'A · Space Grotesk + Inter', display: "'Space Grotesk Variable'", weight: 700, tracking: '-0.02em' },
+  { id: 'b', name: 'B · Big Shoulders Display + Inter', display: "'Big Shoulders Display Variable'", weight: 800, tracking: '0.005em' },
+];
+
+const navItems = ['Experience', 'Journalism', 'Comms', 'About', 'Contact'];
+---
+
+<BaseLayout title="Type test" description="Temporary font comparison page." noindex>
+  <p class="label">Temporary · delete after choosing</p>
+  <h1 class="page-title">Type test</h1>
+  <p>
+    Both pairings use Inter for body text and JetBrains Mono for small labels and dates. Only the display face differs.
+    Resize to 375px to compare on mobile.
+  </p>
+
+  <div class="grid">
+    {
+      pairings.map((p) => (
+        <section
+          class="specimen"
+          aria-labelledby={`pair-${p.id}`}
+          style={`--display: ${p.display}; --display-weight: ${p.weight}; --display-tracking: ${p.tracking};`}
+        >
+          <p class="label pairing" id={`pair-${p.id}`}>
+            {p.name}
+          </p>
+
+          <div class="mock-nav" aria-hidden="true">
+            <span class="mock-wordmark">Jacob Van Luven</span>
+            <span class="mock-links">
+              {navItems.map((n, i) => (
+                <span class={i === 1 ? 'current' : undefined}>{n}</span>
+              ))}
+            </span>
+          </div>
+
+          <p class="label">Sample headline</p>
+          <p class="headline">I translate between business and tech — and build the tools to prove it.</p>
+
+          <p class="subhead">Clear stories. Working tools.</p>
+
+          <p class="body">
+            Journalist by training, communicator by trade. Jacob turns complex technology into clear stories, translates
+            between business users and development teams, and ships his own tools with AI-assisted development.
+          </p>
+
+          <div class="entry">
+            <p class="label">
+              <time>Dec 2025 – Present</time> · Vancouver, B.C.
+            </p>
+            <p class="entry-title">Client Success Specialist</p>
+            <p class="meta">British Columbia Investment Management Corp.</p>
+          </div>
+
+          <div class="entry">
+            <p class="label">
+              <time>Jun 2024 – Aug 2024</time> · Written · Video · Social
+            </p>
+            <p class="entry-title">Preparedness Series</p>
+            <p class="meta">Emergency Planning Secretariat</p>
+          </div>
+
+          <p class="numerals" aria-hidden="true">
+            0123456789 — 31 communities · False Creek · BC Place
+          </p>
+        </section>
+      ))
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .page-title {
+    margin-bottom: 0.75rem;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .specimen {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: clamp(1rem, 4vw, 2rem);
+    min-width: 0;
+  }
+
+  .pairing {
+    color: var(--accent);
+    margin: 0 0 1.25rem;
+  }
+
+  .mock-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem 1.25rem;
+    padding-bottom: 0.9rem;
+    margin-bottom: 1.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mock-wordmark {
+    font-family: var(--display);
+    font-weight: var(--display-weight);
+    letter-spacing: var(--display-tracking);
+    font-size: 1.125rem;
+  }
+
+  .mock-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    font-size: 0.9375rem;
+    color: var(--text-muted);
+  }
+
+  .mock-links .current {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.35em;
+  }
+
+  .label {
+    margin: 0 0 0.35rem;
+  }
+
+  .headline {
+    font-family: var(--display);
+    font-weight: var(--display-weight);
+    letter-spacing: var(--display-tracking);
+    font-size: clamp(2rem, 6vw, 3.25rem);
+    line-height: 1.05;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+
+  .subhead {
+    font-family: var(--display);
+    font-weight: 600;
+    letter-spacing: var(--display-tracking);
+    font-size: clamp(1.25rem, 3.5vw, 1.6rem);
+    color: var(--accent);
+    margin: 0 0 1rem;
+  }
+
+  .body {
+    margin: 0 0 1.75rem;
+  }
+
+  .entry {
+    padding: 1rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .entry-title {
+    font-family: var(--display);
+    font-weight: 600;
+    letter-spacing: var(--display-tracking);
+    font-size: 1.375rem;
+    line-height: 1.15;
+    margin: 0 0 0.2rem;
+  }
+
+  .numerals {
+    font-family: var(--display);
+    font-weight: var(--display-weight);
+    letter-spacing: var(--display-tracking);
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    margin: 1rem 0 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
