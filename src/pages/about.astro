@@ -2,6 +2,7 @@
 import type { ImageMetadata } from 'astro';
 import { Image } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Todo from '../components/Todo.astro';
 
 // "Just for fun": Fight Night cards. Rendered only once the images exist in
 // src/assets/side-projects/fight-night/ (copied from assets-inbox/side-projects/fight-night/).
@@ -10,17 +11,40 @@ const fightNight = Object.entries(
 )
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([, mod]) => mod.default);
+
+const fightNightAlt = [
+  'Fight Night 151 “Clash of the Universe” event poster: an eight-bout card with fighter names, flags, rankings and records over a view of Earth from space, headlined by a welterweight championship bout.',
+  'Fight Night 152 “All In” event poster for T-Mobile Arena, Las Vegas: a six-bout card with fighter names, flags and rankings in red and white over a poker-table scene, headlined by a middleweight championship main event.',
+];
 ---
 
 <BaseLayout title="About" description="About Jacob Van Luven: journalist, communicator and builder.">
   <h1>About</h1>
+  <div class="bio">
+    <p>
+      I'm a Vancouver-based communicator with a journalist's instincts. I studied Journalism and Communications at
+      Kwantlen Polytechnic University after earning a Certificate in Journalism from Langara College, where I reported
+      on deadline, produced audio and video features, and built data visualizations.
+    </p>
+    <p>
+      Since 2024 I've worked at BCI: first in internal communications and technology research co-ops in Victoria, then
+      in technology governance and business continuity, and now as a Client Success Specialist in Vancouver. Before
+      that, I ran social and web content for the Emergency Planning Secretariat, which supports 31 Mainland Coast Salish
+      communities.
+    </p>
+    <p>
+      Along the way I picked up a habit: when a tool doesn't exist, I build it. I use AI-assisted development to turn
+      ideas into working software, and this site is where those tools will live.
+    </p>
+    <p>Outside work, you'll find me training, watching sports or hunting down good food.</p>
+  </div>
   <h2>Education</h2>
   <ul>
     <li>Journalism and Communications, Kwantlen Polytechnic University (Surrey, B.C.)</li>
     <li>Certificate in Journalism, Langara College</li>
   </ul>
-  <p class="todo">TODO: bio and interests (fitness, sports, food). Old Wix text is in content-archive/.</p>
-  <p class="todo">TODO: resume PDF download.</p>
+  {/* Resume download stays hidden until Jacob provides a PDF (put it in public/ and link it here). */}
+  <Todo>TODO: resume PDF download.</Todo>
 
   {
     fightNight.length > 0 && (
@@ -33,7 +57,7 @@ const fightNight = Object.entries(
           {fightNight.map((src, i) => (
             <Image
               src={src}
-              alt={`Fight Night event card design ${i + 1} of ${fightNight.length}, made for an MMA simulator game.`}
+              alt={fightNightAlt[i] ?? 'Fight Night event card design made for an MMA simulator game.'}
               widths={[320, 560, 900]}
               sizes="(min-width: 40rem) 18rem, calc(50vw - 1.5rem)"
               loading="lazy"
@@ -46,6 +70,11 @@ const fightNight = Object.entries(
 </BaseLayout>
 
 <style>
+  .bio {
+    max-width: 40rem;
+    margin-bottom: 2rem;
+  }
+
   .fun {
     margin-top: 3rem;
     padding-top: 2rem;

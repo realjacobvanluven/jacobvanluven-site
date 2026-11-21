@@ -1,0 +1,9 @@
+---
+/**
+ * A clearly marked placeholder for content we don't have yet.
+ * Renders only in `npm run dev`; production builds leave it out entirely.
+ */
+const show = import.meta.env.DEV;
+---
+
+{show && <p class="todo"><slot /></p>}

@@ -1,12 +1,33 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Todo from '../components/Todo.astro';
 ---
 
 <BaseLayout>
-  <!-- TODO: cityscape hero (not started). -->
+  {/* TODO: cityscape hero (not started). */}
   <section class="intro">
     <p class="label">Jacob Van Luven</p>
-    <h1>TODO: headline (Jacob to pick from the options in CLAUDE.md)</h1>
-    <p class="todo">TODO: short intro and highlights.</p>
+    <h1>I translate between business and tech — and build the tools to prove it.</h1>
+    <p class="subheading">Clear stories. Working tools.</p>
+    <p class="lede">
+      I'm Jacob Van Luven, a Client Success Specialist at BCI in Vancouver. I started in journalism, moved into
+      communications, and now work between business teams and developers — turning complex technology into plain
+      language, and building my own tools along the way.
+    </p>
+    <Todo>TODO: highlights.</Todo>
   </section>
 </BaseLayout>
+
+<style>
+  .subheading {
+    font-family: var(--font-display);
+    font-size: clamp(1.25rem, 3vw, 1.625rem);
+    color: var(--accent);
+    margin: 0 0 1.5rem;
+  }
+
+  .lede {
+    max-width: 40rem;
+    font-size: 1.125rem;
+  }
+</style>

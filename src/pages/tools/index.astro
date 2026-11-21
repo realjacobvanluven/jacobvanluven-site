@@ -9,7 +9,7 @@ const tools = (await getCollection('tools', (t) => !t.data.draft)).sort((a, b) =
   <h1>Tools</h1>
   {
     tools.length === 0 ? (
-      <p class="todo">No tools published yet.</p>
+      <p class="meta">No tools published yet.</p>
     ) : (
       <ul>
         {tools.map((t) => (

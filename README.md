@@ -1,6 +1,8 @@
 # jacobvanluven-site
 
-Portfolio site for Jacob Van Luven. Built with [Astro](https://astro.build) (static output), deployed to Cloudflare Pages from `main`.
+Portfolio site for Jacob Van Luven. Built with [Astro](https://astro.build) (static output), deployed to Cloudflare Pages (project `jacobvanluven`) from `main`.
+
+Live: https://jacobvanluven.pages.dev
 
 See `CLAUDE.md` for the full project brief.
 

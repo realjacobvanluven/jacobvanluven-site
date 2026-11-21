@@ -14,7 +14,7 @@ confident, no begging calls-to-action.
 His differentiator: **a journalist and communicator who builds.** He translates between business users and
 development teams, turns complex technology into clear stories, and ships his own tools with AI-assisted
 development. Every page should reinforce that blend of storytelling + business + building.
-Headline options (let Jacob pick; don't hard-code one without asking):
+Headline (decided 2026-11-21): "I translate between business and tech — and build the tools to prove it." with the subheading "Clear stories. Working tools." Original options were:
 - "I translate between business and tech — and build the tools to prove it."
 - "Journalist by training. Builder by habit. Translator between business and tech."
 - "Clear stories. Working tools."
@@ -23,7 +23,7 @@ In public copy say "AI-assisted development", not "vibe coding".
 ## Hard constraints
 - **$0 total.** No paid hosting, no paid APIs, no custom domain. Never add anything that needs a credit card.
 - **Hosting:** Cloudflare Pages, connected to this GitHub repo. Every push to `main` deploys.
-  Target URL: `jacobvanluven.pages.dev` (or the closest available name).
+  Live URL: https://jacobvanluven.pages.dev (Cloudflare Pages project `jacobvanluven`). `site` in `astro.config.mjs` must match.
 - **Static-first.** Everything ships as static files. Tools must run client-side (in the browser).
   No secrets or API keys in the repo, ever.
 - **Mobile is a first-class target**, not an afterthought. Test every feature at 375px wide.
@@ -100,7 +100,9 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
     Supports 31 Mainland Coast Salish communities. Weekly social campaigns, info packets, written web series
     (Preparedness Series: forest fires, extreme heat, drought, evacuations), short-form videos, website content/SEO.
 - BCI work is confidential: describe roles and skills, never invent or show deliverables.
-- Do not invent facts, metrics, quotes or testimonials. If copy needs something we don't have, leave a clearly marked TODO.
+- Do not invent facts, metrics, quotes or testimonials. If copy needs something we don't have, leave a clearly marked TODO
+  using `src/components/Todo.astro`, which renders only in `npm run dev`. Production builds never show TODO boxes;
+  anything still missing is simply left out (e.g. the resume download stays hidden until Jacob provides a PDF).
 
 ## Content approach (decided 2026-11-21; supersedes "keep ALL of it" below)
 The Wix migration is done (text copied verbatim, 2026-11-21). The site is now **curated, not an archive**:
