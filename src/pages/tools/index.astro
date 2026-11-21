@@ -1,0 +1,26 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const tools = (await getCollection('tools', (t) => !t.data.draft)).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout title="Tools" description="Interactive tools built by Jacob Van Luven with AI-assisted development.">
+  <h1>Tools</h1>
+  {
+    tools.length === 0 ? (
+      <p class="todo">No tools published yet.</p>
+    ) : (
+      <ul>
+        {tools.map((t) => (
+          <li>
+            <h2>
+              <a href={`/tools/${t.id}/`}>{t.data.title}</a>
+            </h2>
+            <p>{t.data.description}</p>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</BaseLayout>

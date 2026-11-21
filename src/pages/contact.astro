@@ -1,0 +1,12 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../data/site';
+---
+
+<BaseLayout title="Contact" description="Get in touch with Jacob Van Luven by email or LinkedIn.">
+  <h1>Contact</h1>
+  <ul class="contact-list">
+    <li><span class="label">Email</span> <a href={`mailto:${site.email}`}>{site.email}</a></li>
+    <li><span class="label">LinkedIn</span> <a href={site.linkedin}>linkedin.com/in/jacob-van-luven</a></li>
+  </ul>
+</BaseLayout>

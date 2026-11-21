@@ -1,0 +1,38 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatRange } from '../lib/format';
+
+const roles = (await getCollection('experience')).sort((a, b) => b.data.start.localeCompare(a.data.start));
+const rendered = await Promise.all(roles.map(async (r) => ({ role: r, Content: (await render(r)).Content })));
+---
+
+<BaseLayout title="Experience" description="Jacob Van Luven's work history at BCI and the Emergency Planning Secretariat.">
+  <h1>Experience</h1>
+  <ol class="timeline">
+    {
+      rendered.map(({ role: { data }, Content }) => (
+        <li>
+          <p class="label">
+            {formatRange(data.start, data.end)}
+          </p>
+          <h2>{data.role}</h2>
+          <p class="meta">
+            {data.org}
+            {data.location && ` · ${data.location}`}
+            {data.workMode && ` (${data.workMode})`}
+          </p>
+          {data.summary && <p>{data.summary}</p>}
+          {data.skills.length > 0 && (
+            <ul class="skills">
+              {data.skills.map((s) => (
+                <li>{s}</li>
+              ))}
+            </ul>
+          )}
+          <Content />
+        </li>
+      ))
+    }
+  </ol>
+</BaseLayout>

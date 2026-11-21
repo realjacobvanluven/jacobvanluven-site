@@ -22,3 +22,7 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# original media (large; processed copies are committed elsewhere)
+assets-inbox/*
+!assets-inbox/README.md

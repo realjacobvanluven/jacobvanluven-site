@@ -1,0 +1,32 @@
+---
+import { getCollection } from 'astro:content';
+import { formatDate } from '../lib/format';
+
+interface Props {
+  section: 'journalism' | 'comms';
+}
+
+const { section } = Astro.props;
+const stories = (await getCollection('stories', (s) => !s.data.draft && s.data.section === section)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+---
+
+{
+  stories.length === 0 ? (
+    <p class="todo">TODO: migrate {section} content from the Wix site.</p>
+  ) : (
+    <ul class="story-list">
+      {stories.map((s) => (
+        <li>
+          <time class="label" datetime={s.data.date.toISOString()}>{formatDate(s.data.date)}</time>
+          <span class="label">{s.data.format}</span>
+          <h2>
+            {s.data.externalUrl ? <a href={s.data.externalUrl}>{s.data.title}</a> : s.data.title}
+          </h2>
+          <p>{s.data.description}</p>
+        </li>
+      ))}
+    </ul>
+  )
+}
