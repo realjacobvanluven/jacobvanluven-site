@@ -79,8 +79,9 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   - *Landmarks:* hand-built BC Place (roof with an orange LED ring), Science World geodesic dome, Harbour Centre with
     its lookout. Harbour Centre gets a subtle beacon so its hotspot is findable.
   - *Finish:* soft bloom on lights, distance fog, very subtle film grain.
-- **Alive:** windows flicker on/off; lights brighten near the cursor (or touch point); sky/lighting follows
-  the visitor's local time (dusk / night / dawn); optional subtle rain.
+- **Alive:** windows flicker on/off; lights brighten near the cursor (or touch point); optional subtle rain.
+  Blue hour is the only look in v1. Time-of-day changes (night, dawn, following the visitor's clock) are a possible
+  later extra, not v1.
 - **Navigation:** landmarks are hotspots for site sections. Starting mapping (adjust if something reads better):
   Science World → Tools (the lab), BC Place → Experience, Harbour Centre → About & Contact (the lookout),
   a prominent downtown tower → Journalism, another → Comms work.
