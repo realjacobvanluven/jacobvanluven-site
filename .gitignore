@@ -29,3 +29,6 @@ assets-inbox/*
 
 # media hand-off archives (unzipped into assets-inbox/)
 *.zip
+
+# downloaded raw open data (scripts/build-skyline-data.mjs)
+scripts/.cache/
