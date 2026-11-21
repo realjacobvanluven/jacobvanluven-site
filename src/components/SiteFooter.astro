@@ -14,9 +14,10 @@ const year = new Date().getFullYear();
     </ul>
   </div>
   <p class="attribution">
-    Skyline data: contains information licensed under the
-    <a href="https://opendata.vancouver.ca/pages/licence/">Open Government Licence – Vancouver</a>. Map data ©
-    <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, available under the
+    {/* Explicit {' '} spaces: Astro's HTML compression drops line breaks between text and links. */}
+    Skyline data: contains information licensed under the{' '}
+    <a href="https://opendata.vancouver.ca/pages/licence/">Open Government Licence – Vancouver</a>. Map data ©{' '}
+    <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, available under the{' '}
     <a href="https://opendatacommons.org/licenses/odbl/">Open Database License (ODbL)</a>.
   </p>
 </footer>

@@ -39,6 +39,9 @@ In public copy say "AI-assisted development", not "vibe coding".
 - **Palette:** orange and black. Near-black backgrounds (#0a0a0a range), warm orange accent
   (sodium-streetlight / sunset orange, e.g. #ff7a1a range), off-white text. Orange is the accent, not the background.
 - **Feel:** cinematic, night-time Vancouver. Confident, modern typography (not default system fonts; use free fonts via Fontsource).
+- **Typography (decided 2026-11-21, pairing A):** Space Grotesk for headings, Inter for body text, JetBrains Mono for
+  small labels and dates. All self-hosted via Fontsource variable packages (`@fontsource-variable/*`). Big Shoulders Display
+  was tested and rejected; don't reintroduce other display faces without asking.
 - **Signature element:** an interactive, realistic Vancouver skyline (see below).
 
 ## The cityscape hero (signature feature)
