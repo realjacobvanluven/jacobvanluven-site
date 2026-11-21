@@ -5,7 +5,7 @@ format: "video"
 description: "A 60-second Instagram story for The Voice about people picking up instruments during lockdown."
 credit: "Story by Jan Bevilacqua · Instagram story by Jacob Van Luven"
 outlet: "The Voice (Langara College)"
-# Credit read from the video ("Jan Bevilacqua Reports:"). TODO(Jacob): confirm your role and add a date.
+# Credit confirmed by Jacob 2026-11-21. TODO(Jacob): date.
 media:
   - type: video
     src: /media/journalism/video/lockdown-music.mp4

@@ -2,9 +2,8 @@
 title: "Fair or unfair: the first year of New York's Boston-style qualifying standard"
 section: "journalism"
 format: "social"
-description: "Carousel cover graphic for a story on marathon qualifying standards."
-credit: "Promo graphic by Jacob Van Luven"
-# TODO(Jacob): no reporter is named on this graphic. Whose story was it, where did it run, and when?
+description: "Social promo for a classmate's story on New York's Boston-style marathon qualifying standard."
+# Left uncredited at Jacob's request (a classmate's story). TODO(Jacob): date.
 media:
   - type: image
     src: ../../assets/journalism/social/boston-qualifier.png

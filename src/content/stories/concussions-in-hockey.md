@@ -8,7 +8,7 @@ media:
   - type: audio
     src: /media/journalism/audio/jrnl2240-feature-story.mp3
     label: "Concussions in Hockey, an audio feature by Jacob Van Luven (6:20)"
-# Audio file from assets-inbox/journalism/audio/jrnl2240-feature-story.mp3 (6:20, matches the Wix "Concussions in Hockey" track length). TODO(Jacob): confirm.
+# Audio file from assets-inbox/journalism/audio/jrnl2240-feature-story.mp3 (6:20): confirmed by Jacob 2026-11-21 as the Concussions in Hockey piece.
 ---
 
 Made for JRNL 2240
