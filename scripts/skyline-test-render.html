@@ -1,0 +1,140 @@
+<!doctype html>
+<!--
+  Skyline test render (step 2): plain grey blocks on black from the hero camera, landmarks in orange.
+  Not part of the site. Serve the repo root locally and open
+  /scripts/skyline-test-render.html?preset=desktop  (or preset=phone).
+  When done it sets window.__result = { png, visibility } for the capture script.
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// Camera presets: Olympic Village seawall, raised to 40 m, looking slightly down across False Creek.
+// bearing: compass degrees (0 = north, clockwise); pitch: degrees (negative = down); fov: vertical degrees.
+const PRESETS = {
+  desktop: { width: 1600, height: 900, bearing: 15, pitch: -5, fov: 68 },
+  phone: { width: 375, height: 812, bearing: 339, pitch: -10, fov: 74 },
+};
+const CAMERA_HEIGHT = 40;
+const MAIN = ['bc-place', 'harbour-centre', 'science-world'];
+
+const params = new URLSearchParams(location.search);
+const preset = PRESETS[params.get('preset') ?? 'desktop'];
+const { width, height } = preset;
+
+const data = await (await fetch('/public/data/skyline.json')).json();
+
+const decode = (flat) => {
+  const pts = [];
+  let x = 0, y = 0;
+  for (let i = 0; i < flat.length; i += 2) { x += flat[i]; y += flat[i + 1]; pts.push(new THREE.Vector2(x / 10, y / 10)); }
+  return pts;
+};
+
+// Which landmark (if any) a building part belongs to: centroid inside the landmark's bounds.
+const landmarkOf = (pts) => {
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  return MAIN.find((id) => {
+    const [x0, y0, x1, y1] = data.landmarks[id].bounds.map((v) => v / 10);
+    return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+  });
+};
+
+const groups = { other: [], ...Object.fromEntries(MAIN.map((id) => [id, []])) };
+const tops = Object.fromEntries(MAIN.map((id) => [id, 0]));
+for (const [h, base, , ...ring] of data.buildings) {
+  const pts = decode(ring);
+  const top = h / 10, bottom = base / 10;
+  if (top - bottom < 0.5) continue;
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: top - bottom, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // shape y (north) → -z, extrusion → up
+  geo.translate(0, bottom, 0);
+  const lm = landmarkOf(pts);
+  (lm ? groups[lm] : groups.other).push(geo);
+  if (lm) tops[lm] = Math.max(tops[lm], top);
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(width, height);
+document.body.append(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(preset.fov, width / height, 5, 8000);
+const b = THREE.MathUtils.degToRad(preset.bearing), p = THREE.MathUtils.degToRad(preset.pitch);
+camera.position.set(0, CAMERA_HEIGHT, 0);
+camera.lookAt(Math.sin(b) * Math.cos(p), CAMERA_HEIGHT + Math.sin(p), -Math.cos(b) * Math.cos(p));
+
+const merged = Object.fromEntries(Object.entries(groups).map(([k, list]) => [k, list.length ? mergeGeometries(list) : null]));
+
+// ---- Visibility: count each landmark's pixels with and without the rest of the city in front. ----
+const ID_COLOURS = { 'bc-place': 0xff0000, 'harbour-centre': 0x00ff00, 'science-world': 0x0000ff };
+function countPixels(withCity) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  if (withCity) scene.add(new THREE.Mesh(merged.other, new THREE.MeshBasicMaterial({ color: 0x000000 })));
+  for (const id of MAIN) if (merged[id]) scene.add(new THREE.Mesh(merged[id], new THREE.MeshBasicMaterial({ color: ID_COLOURS[id] })));
+  renderer.setClearColor(0x000000);
+  renderer.render(scene, camera);
+  const gl = renderer.getContext();
+  const px = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const counts = Object.fromEntries(MAIN.map((id) => [id, 0]));
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i] > 200 && px[i + 1] < 50 && px[i + 2] < 50) counts['bc-place']++;
+    else if (px[i + 1] > 200 && px[i] < 50 && px[i + 2] < 50) counts['harbour-centre']++;
+    else if (px[i + 2] > 200 && px[i] < 50 && px[i + 1] < 50) counts['science-world']++;
+  }
+  return counts;
+}
+const alone = countPixels(false);
+const inCity = countPixels(true);
+const visibility = Object.fromEntries(
+  MAIN.map((id) => [id, { pixelsAlone: alone[id], pixelsVisible: inCity[id], visibleShare: alone[id] ? +(inCity[id] / alone[id]).toFixed(2) : 0 }]),
+);
+
+// ---- The test image: grey blocks on black, landmarks orange. ----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(-600, 900, 400); // light from the south-west so faces read as separate blocks
+scene.add(sun);
+scene.add(new THREE.Mesh(merged.other, new THREE.MeshLambertMaterial({ color: 0x8a8a8a })));
+for (const id of MAIN) if (merged[id]) scene.add(new THREE.Mesh(merged[id], new THREE.MeshLambertMaterial({ color: 0xff7a1a, emissive: 0x552200 })));
+renderer.render(scene, camera);
+
+// Labels on a 2D overlay.
+const out = document.createElement('canvas');
+out.width = width; out.height = height;
+const ctx = out.getContext('2d');
+ctx.drawImage(renderer.domElement, 0, 0);
+ctx.font = `600 ${width < 600 ? 13 : 18}px Helvetica, Arial, sans-serif`;
+ctx.textAlign = 'center';
+for (const id of MAIN) {
+  const [x, y] = data.landmarks[id].center.map((v) => v / 10);
+  const v = new THREE.Vector3(x, tops[id] + 4, -y).project(camera);
+  if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue; // off screen
+  const sx = (v.x + 1) / 2 * width, sy = (1 - v.y) / 2 * height;
+  const label = `${data.landmarks[id].name} (${Math.round(visibility[id].visibleShare * 100)}% visible)`;
+  ctx.strokeStyle = '#ff7a1a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - 28); ctx.stroke();
+  ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(label, sx, sy - 34);
+  ctx.fillStyle = '#ffb27a'; ctx.fillText(label, sx, sy - 34);
+}
+ctx.font = `${width < 600 ? 11 : 14}px Helvetica, Arial, sans-serif`;
+ctx.textAlign = 'left'; ctx.fillStyle = '#999';
+ctx.fillText(`${params.get('preset') ?? 'desktop'} ${width}×${height} · camera 40 m, bearing ${preset.bearing}°, pitch ${preset.pitch}°, fov ${preset.fov}°`, 10, height - 12);
+
+window.__result = { png: out.toDataURL('image/png'), visibility };
+</script>
+</body>
+</html>

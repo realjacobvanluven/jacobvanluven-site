@@ -30,10 +30,11 @@ const OUT = join(ROOT, 'public/data/skyline.json');
 const USER_AGENT = 'skyline-data-build/1.0 (static site preprocessing script)';
 
 // ---- The shot ---------------------------------------------------------------------------------------
-/** Camera: Olympic Village seawall on the south shore of False Creek. Origin of the output coordinates. */
-const CAMERA = { lat: 49.2706, lon: -123.1078 };
-/** Keep buildings inside this wedge (compass bearings from the camera, clockwise, wrapping through north). */
-const VIEW = { fromBearing: 275, toBearing: 65, maxDistance: 3000, minNorth: 30 };
+/** Camera: on the Olympic Village seawall at the water's edge (south shore of False Creek). Origin of the output coordinates. */
+const CAMERA = { lat: 49.27175, lon: -123.1078 };
+/** Crop wedge: keep buildings within these compass bearings (clockwise, wrapping through north) of APEX.
+ *  APEX sits ~130 m inland of the camera so the wedge is wide enough at the shoreline. */
+const VIEW = { apex: { lat: 49.2706, lon: -123.1078 }, fromBearing: 275, toBearing: 65, maxDistance: 3000, minNorth: 30 };
 /** Download box (lat/lon) that safely contains the wedge. */
 const BBOX = { south: 49.268, west: -123.15, north: 49.2975, east: -123.08 };
 
@@ -127,7 +128,9 @@ function bearingDistance([x, y]) {
   return { bearing: ((Math.atan2(x, y) * 180) / Math.PI + 360) % 360, distance: Math.hypot(x, y) };
 }
 
-function inView(point) {
+const APEX = toLocal([VIEW.apex.lon, VIEW.apex.lat]);
+function inView([x, y]) {
+  const point = [x - APEX[0], y - APEX[1]];
   const { bearing, distance } = bearingDistance(point);
   const inArc = VIEW.fromBearing > VIEW.toBearing
     ? bearing >= VIEW.fromBearing || bearing <= VIEW.toBearing
@@ -361,6 +364,7 @@ const data = {
     '© OpenStreetMap contributors, ODbL',
   ],
   origin: CAMERA,
+  crop: { apex: APEX.map(dm), fromBearing: VIEW.fromBearing, toBearing: VIEW.toBearing, maxDistance: VIEW.maxDistance },
   units: 'decimetres; x east, y north, from origin; rings delta-encoded',
   sources: SRC,
   // [heightDm, baseDm, sourceIndex, ...ring]

@@ -42,10 +42,13 @@ const polys = buildings
 
 const shore = data.shoreline.map((l) => `<polyline points="${decode(l).map(px).join(' ')}" fill="none" stroke="#3a8dde" stroke-width="2"/>`).join('\n');
 
-// Camera and view wedge (bearings 275° → 65°, 3 km).
-const ray = (deg) => [Math.sin((deg * Math.PI) / 180) * 3000, Math.cos((deg * Math.PI) / 180) * 3000];
+// Camera (origin) and crop wedge (drawn from the crop apex).
+const { crop } = data;
+const [ax, ay] = crop.apex.map((v) => v / 10);
+const ray = (deg) => [ax + Math.sin((deg * Math.PI) / 180) * crop.maxDistance, ay + Math.cos((deg * Math.PI) / 180) * crop.maxDistance];
 const cam = px([0, 0]);
-const wedge = [275, 65].map((d) => `<line x1="${cam.split(',')[0]}" y1="${cam.split(',')[1]}" x2="${px(ray(d)).split(',')[0]}" y2="${px(ray(d)).split(',')[1]}" stroke="#fff" stroke-opacity="0.35" stroke-dasharray="8 6"/>`).join('');
+const apex = px([ax, ay]).split(',');
+const wedge = [crop.fromBearing, crop.toBearing].map((d) => `<line x1="${apex[0]}" y1="${apex[1]}" x2="${px(ray(d)).split(',')[0]}" y2="${px(ray(d)).split(',')[1]}" stroke="#fff" stroke-opacity="0.35" stroke-dasharray="8 6"/>`).join('');
 
 const main = new Set(['bc-place', 'harbour-centre', 'science-world']);
 const labels = Object.entries(data.landmarks).map(([id, l]) => {
