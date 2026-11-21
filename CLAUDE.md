@@ -58,8 +58,27 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   **Science World** (geodesic dome, on the right near the water), Rogers Arena, and the Cambie Bridge.
   Footprint data won't capture domes/roofs/the saucer, so hand-model these landmarks as simple, recognizable
   low-poly meshes positioned with real coordinates.
-- **Terrain:** mountains as layered silhouettes, or from free Canadian elevation data (CDEM) if it stays light.
-- **Colour:** buildings near-black; windows glow warm orange; dusk sky gradient into black.
+- **Camera and framing (decided 2026-11-21):** on the Olympic Village seawall at the water's edge
+  (49.27175, −123.1078), about 40 m up, looking slightly down across False Creek. Normal lens framed on downtown
+  (BC Place and Harbour Centre); the camera turns toward Science World (far right, ~60° east of north) with the
+  cursor, scroll or phone tilt. Keep the full captured area in the data, but at render time draw only what's in view
+  and use simpler detail for distant buildings.
+- **Data notes:** the City's 2015 footprints have no heights; heights and stepped podium/tower parts come from the
+  2009 dataset, with OSM for newer towers (`scripts/build-skyline-data.mjs`, `npm run data:skyline`).
+- **Look (decided 2026-11-21): realistic, not stylized.** The scene must look like a real photograph of Vancouver, not
+  orange-and-black blocks. Orange and black are the site's theme, carried by lighting and UI, never by painting
+  buildings orange.
+  - *Time:* blue hour, about 20 minutes after sunset. The sky runs from deep navy overhead to a warm orange glow low
+    on the western (left) horizon behind the mountains.
+  - *Buildings:* varied facades, dark reflective glass curtain walls and lighter concrete. Lit windows are generated
+    per floor: mostly warm, some cool white, roughly 30–50% lit, randomized. Red aviation lights blink on the
+    tallest towers.
+  - *Water:* reflective False Creek with gentle ripples, mirroring city lights. Warm streetlight glow along the seawall.
+  - *Mountains:* North Shore from real elevation data (CDEM) if light enough, otherwise layered silhouettes, with
+    snow-dusted peaks and atmospheric haze.
+  - *Landmarks:* hand-built BC Place (roof with an orange LED ring), Science World geodesic dome, Harbour Centre with
+    its lookout. Harbour Centre gets a subtle beacon so its hotspot is findable.
+  - *Finish:* soft bloom on lights, distance fog, very subtle film grain.
 - **Alive:** windows flicker on/off; lights brighten near the cursor (or touch point); sky/lighting follows
   the visitor's local time (dusk / night / dawn); optional subtle rain.
 - **Navigation:** landmarks are hotspots for site sections. Starting mapping (adjust if something reads better):
