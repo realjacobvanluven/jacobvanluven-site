@@ -1,0 +1,80 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatStoryDate } from '../lib/format';
+import type { Story } from '../lib/stories';
+
+interface Props {
+  story: Story;
+}
+
+const { story } = Astro.props;
+const { data } = story;
+const { Content } = await render(story);
+const sectionLabel = data.section === 'journalism' ? 'Journalism' : 'Comms';
+---
+
+<BaseLayout title={data.title} description={data.description ?? `${data.title}, by Jacob Van Luven.`}>
+  <article class="story">
+    <p class="label">
+      <a href={`/${data.section}/`}>{sectionLabel}</a>
+      {data.series && ` / ${data.series}`}
+    </p>
+    <h1>{data.title}</h1>
+    {data.description && <p class="standfirst">{data.description}</p>}
+    <p class="label byline">
+      By Jacob Van Luven
+      {
+        data.date && (
+          <>
+            {' · '}
+            <time datetime={data.date.toISOString().slice(0, 10)}>{formatStoryDate(data.date, data.datePrecision)}</time>
+          </>
+        )
+      }
+    </p>
+    <div class="prose">
+      <Content />
+    </div>
+    {
+      data.externalUrl && (
+        <p class="label original">
+          Also at <a href={data.externalUrl}>{data.outlet ?? new URL(data.externalUrl).hostname}</a>
+        </p>
+      )
+    }
+  </article>
+</BaseLayout>
+
+<style>
+  .standfirst {
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    margin-top: -0.5rem;
+  }
+
+  .byline {
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .original {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .prose :global(p),
+  .prose :global(li) {
+    overflow-wrap: anywhere; /* long source URLs must not break the 375px layout */
+  }
+
+  .prose :global(h2) {
+    margin-top: 2.5rem;
+  }
+
+  .prose :global(h3) {
+    font-size: 1.125rem;
+    margin: 2rem 0 0.5rem;
+  }
+</style>

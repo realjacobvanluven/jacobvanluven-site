@@ -14,3 +14,10 @@ export function formatRange(start: string, end?: string): string {
 export function formatDate(d: Date): string {
   return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
+
+/** Story dates honour their precision: "Feb 5, 2021" or "May 2023". */
+export function formatStoryDate(d: Date, precision: 'day' | 'month' | 'year' = 'day'): string {
+  if (precision === 'year') return String(d.getUTCFullYear());
+  if (precision === 'month') return formatDate(d);
+  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}

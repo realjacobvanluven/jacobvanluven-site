@@ -12,4 +12,7 @@ skills:
   - Technical white papers
   - Award nominations
   - Intranet articles
+# Source: From the Wix "Term #2" text.
 ---
+
+Executed comprehensive technology research initiatives while conducting in-depth interviews with subject matter experts and key stakeholders across the organization. Crafted diverse high-impact content including technical white papers, award nominations, and intranet articles, while strategically amplifying communications through various channels to enhance department visibility and thought leadership.

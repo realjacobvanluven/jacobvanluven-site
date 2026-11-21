@@ -7,6 +7,6 @@ employment: contract
 start: 2025-12
 summary: Contract, full-time.
 skills: []
+# TODO(Jacob): describe the role and skills (no confidential deliverables).
 ---
 
-<!-- TODO(Jacob): describe the role and skills (no confidential deliverables). -->

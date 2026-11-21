@@ -1,0 +1,17 @@
+---
+import StoryArticle from '../../components/StoryArticle.astro';
+import { getStories, hasBody, type Story } from '../../lib/stories';
+
+export async function getStaticPaths() {
+  const stories = (await getStories('comms')).filter(hasBody);
+  return stories.map((story) => ({ params: { slug: story.id }, props: { story } }));
+}
+
+interface Props {
+  story: Story;
+}
+
+const { story } = Astro.props;
+---
+
+<StoryArticle story={story} />

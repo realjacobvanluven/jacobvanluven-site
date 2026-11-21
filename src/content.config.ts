@@ -35,13 +35,26 @@ const stories = defineCollection({
   schema: ({ image }) =>
     z.object({
       title: z.string(),
-      date: z.coerce.date(),
+      /** Omit when the original gives no date (don't invent one); add a TODO comment instead. */
+      date: z.coerce.date().optional(),
+      /** How much of `date` is real: "May, 2023" is stored as 2023-05-01 with precision "month". */
+      datePrecision: z.enum(['day', 'month', 'year']).default('day'),
       section: z.enum(['journalism', 'comms']),
-      format: z.enum(['written', 'audio', 'video', 'dataviz', 'social']),
-      description: z.string(),
+      format: z.enum(['written', 'audio', 'video', 'dataviz', 'social', 'photo', 'project']),
+      /** Optional: only where the original has a standfirst/summary. Never invented. */
+      description: z.string().optional(),
+      /** Groups multi-part projects, e.g. "Tricky Transit". */
+      series: z.string().optional(),
       outlet: z.string().optional(),
-      /** Where the piece lives if it is hosted elsewhere (Medium, LangaraVoice, ...). */
+      /** Where the piece lives if it is hosted elsewhere (Medium, LangaraVoice, Substack, ...). */
       externalUrl: z.url().optional(),
+      /** Original Wix page path, kept for provenance during migration. */
+      wixPage: z.string().optional(),
+      /**
+       * Other wordings of the same piece found elsewhere on the Wix site, kept verbatim so nothing is lost.
+       * Not rendered. Jacob decides which version to keep.
+       */
+      alternateText: z.array(z.object({ source: z.string(), text: z.string() })).default([]),
       /** YouTube video ID for lazily embedded videos. */
       youtubeId: z.string().optional(),
       image: image().optional(),

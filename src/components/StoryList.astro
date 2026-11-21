@@ -1,15 +1,13 @@
 ---
-import { getCollection } from 'astro:content';
-import { formatDate } from '../lib/format';
+import { formatStoryDate } from '../lib/format';
+import { getStories, hasBody, storyHref } from '../lib/stories';
 
 interface Props {
   section: 'journalism' | 'comms';
 }
 
 const { section } = Astro.props;
-const stories = (await getCollection('stories', (s) => !s.data.draft && s.data.section === section)).sort(
-  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
-);
+const stories = await getStories(section);
 ---
 
 {
@@ -17,16 +15,43 @@ const stories = (await getCollection('stories', (s) => !s.data.draft && s.data.s
     <p class="todo">TODO: migrate {section} content from the Wix site.</p>
   ) : (
     <ul class="story-list">
-      {stories.map((s) => (
-        <li>
-          <time class="label" datetime={s.data.date.toISOString()}>{formatDate(s.data.date)}</time>
-          <span class="label">{s.data.format}</span>
-          <h2>
-            {s.data.externalUrl ? <a href={s.data.externalUrl}>{s.data.title}</a> : s.data.title}
-          </h2>
-          <p>{s.data.description}</p>
-        </li>
-      ))}
+      {stories.map((s) => {
+        const href = storyHref(s);
+        const external = !hasBody(s);
+        return (
+          <li>
+            <p class="label">
+              {s.data.date && (
+                <time datetime={s.data.date.toISOString().slice(0, 10)}>
+                  {formatStoryDate(s.data.date, s.data.datePrecision)}
+                </time>
+              )}
+              {s.data.date && ' · '}
+              {s.data.format}
+              {s.data.series && ` · ${s.data.series}`}
+            </p>
+            <h2>
+              {href ? (
+                <a href={href}>
+                  {s.data.title}
+                  {external && <span class="ext"> ({s.data.outlet ?? 'external'}) ↗</span>}
+                </a>
+              ) : (
+                s.data.title
+              )}
+            </h2>
+            {s.data.description && <p>{s.data.description}</p>}
+          </li>
+        );
+      })}
     </ul>
   )
 }
+
+<style>
+  .ext {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+</style>
