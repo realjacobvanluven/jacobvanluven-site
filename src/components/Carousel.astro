@@ -4,12 +4,12 @@
  * keyboard scrolling work without JavaScript. A small script adds prev/next buttons and the
  * "2 / 6" counter, and plays animated (video) slides only while visible and motion is allowed.
  */
-import { Image } from 'astro:assets';
+import { Image, getImage } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 
 export type Slide =
   | { type: 'image'; src: ImageMetadata; alt: string }
-  | { type: 'video'; src: string; alt: string };
+  | { type: 'video'; src: string; poster: ImageMetadata; alt: string };
 
 interface Props {
   label: string;
@@ -20,6 +20,12 @@ interface Props {
 
 const { label, slides, eager = false } = Astro.props;
 const sizes = '(min-width: 34rem) 30rem, calc(100vw - 2rem)';
+
+// Video slides always get a still poster, so they never render as an empty box
+// (iOS shows nothing for an unplayed video, and Low Power Mode blocks autoplay).
+const posters = await Promise.all(
+  slides.map((s) => (s.type === 'video' ? getImage({ src: s.poster, width: 720, format: 'webp' }) : null)),
+);
 ---
 
 <section class="carousel" aria-roledescription="carousel" aria-label={label} data-carousel>
@@ -36,7 +42,16 @@ const sizes = '(min-width: 34rem) 30rem, calc(100vw - 2rem)';
               loading={eager && i === 0 ? 'eager' : 'lazy'}
             />
           ) : (
-            <video src={slide.src} muted loop playsinline preload="metadata" aria-label={slide.alt} data-autoplay />
+            <video
+              src={slide.src}
+              poster={posters[i]!.src}
+              muted
+              loop
+              playsinline
+              preload="none"
+              aria-label={slide.alt}
+              data-autoplay
+            />
           )}
         </div>
       ))
@@ -165,7 +180,10 @@ const sizes = '(min-width: 34rem) 30rem, calc(100vw - 2rem)';
             update();
           }
           if (video) {
-            if (entry.intersectionRatio >= 0.6 && !reduceMotion.matches) video.play().catch(() => {});
+            if (entry.intersectionRatio >= 0.6 && !reduceMotion.matches) {
+              // Autoplay refused (e.g. iOS Low Power Mode): the poster stays visible; offer controls instead.
+              video.play().catch(() => (video.controls = true));
+            }
             else video.pause();
           }
         }

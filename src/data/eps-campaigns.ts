@@ -14,7 +14,13 @@ function img(path: string, alt: string): Slide {
   return { type: 'image', src: mod.default, alt };
 }
 
-const video = (path: string, alt: string): Slide => ({ type: 'video', src: `/media/eps/${path}`, alt });
+/** Animated slide. Its poster is a still frame in src/assets/eps/<campaign>/posters/<name>.png (same base name). */
+function video(path: string, alt: string): Slide {
+  const posterPath = path.replace(/([^/]+)\.mp4$/, 'posters/$1.png');
+  const poster = images[`../assets/eps/${posterPath}`];
+  if (!poster) throw new Error(`Missing poster for animated slide: src/assets/eps/${posterPath}`);
+  return { type: 'video', src: `/media/eps/${path}`, poster: poster.default, alt };
+}
 
 export type Campaign = { id: string; title: string; description: string; slides: Slide[] };
 

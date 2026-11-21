@@ -9,9 +9,14 @@ const path = Astro.url.pathname;
 const isCurrent = (href: string) => path === href || path.startsWith(href);
 ---
 
-<header class="site-header">
+<header class="site-header" data-site-header>
   <a class="wordmark" href="/" aria-current={path === '/' ? 'page' : undefined}>{site.name}</a>
-  <nav aria-label="Main">
+  {/* The menu button only appears on small screens once JS runs; without JS the plain list shows. */}
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu" hidden data-menu-toggle>
+    <span class="menu-icon" aria-hidden="true"></span>
+    Menu
+  </button>
+  <nav id="site-menu" aria-label="Main">
     <ul>
       {
         items.map((item) => (
@@ -28,15 +33,16 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
 
 <style>
   .site-header {
+    position: relative;
+    z-index: 50; /* stays above a full-screen hero */
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
-    gap: 0.5rem 2rem;
+    gap: 1rem 2rem;
     width: 100%;
     max-width: var(--max-width);
     margin: 0 auto;
-    padding: 1.25rem var(--gutter);
+    padding: 1rem var(--gutter);
     border-bottom: 1px solid var(--border);
   }
 
@@ -46,6 +52,7 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     font-size: 1.125rem;
     color: var(--text);
     text-decoration: none;
+    white-space: nowrap;
   }
 
   ul {
@@ -59,7 +66,7 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
 
   nav a {
     display: inline-block;
-    padding: 0.35rem 0; /* larger tap target on mobile */
+    padding: 0.5rem 0;
     font-size: 0.9375rem;
     color: var(--text-muted);
     text-decoration: none;
@@ -75,4 +82,146 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     text-decoration-thickness: 2px;
     text-underline-offset: 0.35em;
   }
+
+  .menu-toggle {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 2.75rem; /* 44px touch target */
+    padding: 0 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgb(10 10 10 / 0.6);
+    color: var(--text);
+    font: 500 0.875rem var(--font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .menu-toggle:hover {
+    border-color: var(--accent);
+  }
+
+  /* Two-line icon that turns into an X when open. */
+  .menu-icon,
+  .menu-icon::before {
+    display: block;
+    width: 1rem;
+    height: 2px;
+    background: currentColor;
+    transition: transform 0.2s ease;
+  }
+
+  .menu-icon {
+    position: relative;
+    transform: translateY(-3px);
+  }
+
+  .menu-icon::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+  }
+
+  .menu-toggle[aria-expanded='true'] .menu-icon {
+    transform: translateY(0) rotate(45deg);
+  }
+
+  .menu-toggle[aria-expanded='true'] .menu-icon::before {
+    top: 0;
+    transform: rotate(-90deg);
+  }
+
+  @media (max-width: 40rem) {
+    /* No JS: the links stay visible as a wrapped list under the name. */
+    .site-header:not(.has-menu) {
+      flex-wrap: wrap;
+    }
+
+    .site-header.has-menu .menu-toggle {
+      display: inline-flex;
+    }
+
+    .site-header.has-menu nav {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      padding: 0.5rem var(--gutter) 1.25rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1.5rem 2rem rgb(0 0 0 / 0.5);
+    }
+
+    .site-header.has-menu nav:not(.open) {
+      display: none;
+    }
+
+    .site-header.has-menu ul {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .site-header.has-menu nav a {
+      display: block;
+      padding: 0.8rem 0;
+      font-size: 1.125rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .site-header.has-menu li:last-child a {
+      border-bottom: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .menu-icon,
+    .menu-icon::before {
+      transition: none;
+    }
+  }
 </style>
+
+<script>
+  const header = document.querySelector<HTMLElement>('[data-site-header]');
+  const toggle = header?.querySelector<HTMLButtonElement>('[data-menu-toggle]');
+  const menu = header?.querySelector<HTMLElement>('#site-menu');
+
+  if (header && toggle && menu) {
+    header.classList.add('has-menu');
+    toggle.hidden = false;
+
+    const setOpen = (open: boolean) => {
+      toggle.setAttribute('aria-expanded', String(open));
+      menu.classList.toggle('open', open);
+    };
+
+    toggle.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') !== 'true';
+      setOpen(open);
+      if (open) menu.querySelector('a')?.focus();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && menu.classList.contains('open')) {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+
+    // Close when focus or a tap moves outside the header.
+    header.addEventListener('focusout', (e) => {
+      // Only when focus lands somewhere else (Tab); Safari taps give no relatedTarget, and
+      // closing then would hide a link before its click registers. Taps are handled below.
+      const next = e.relatedTarget as Node | null;
+      if (next && !header.contains(next)) setOpen(false);
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (!header.contains(e.target as Node)) setOpen(false);
+    });
+
+    // Reset when resizing up to the desktop layout.
+    matchMedia('(min-width: 40.0625rem)').addEventListener('change', (e) => e.matches && setOpen(false));
+  }
+</script>
