@@ -1,0 +1,182 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Figures are measured from the repo (public/data/skyline.json, scripts/measure-hero-size.mjs), not estimated.
+const facts = [
+  { n: '6,832', label: 'buildings in the scene' },
+  { n: '11,442', label: 'trees, 1,893 boats' },
+  { n: '~490 KB', label: 'hero code + data, gzipped' },
+  { n: '$0', label: 'hosting, data and tools' },
+];
+---
+
+<BaseLayout
+  title="How I built the skyline"
+  description="A case study: how the interactive Vancouver skyline on this site was built from open data, hand-modelled landmarks and AI-assisted development, and kept fast enough for a phone."
+>
+  <p class="label"><a href="/">Home</a> / Case study</p>
+  <h1>How I built the skyline</h1>
+  <p class="lede">
+    The skyline on the homepage isn't a video or a stock photo. It's a real-time 3D model of downtown Vancouver, built from
+    city open data and running in your browser. This is how it came together, and what I'd do differently.
+  </p>
+
+  <dl class="facts">
+    {facts.map((f) => <div><dt>{f.label}</dt><dd>{f.n}</dd></div>)}
+  </dl>
+
+  <h2>The brief</h2>
+  <p>
+    I wanted the first screen of my site to say what I do: translate between people with a goal and the people who build the
+    thing. A skyline is a good metaphor for that, and Vancouver is home. The constraints were strict. It had to cost nothing to
+    host, run entirely in the browser, stay smooth on a mid-range phone, and still work for anyone who can't or won't run 3D.
+  </p>
+  <p>
+    I'm a journalist and communicator, not a graphics programmer. I wrote the brief, made the creative and technical decisions,
+    and directed the build with Claude Code. That's what I mean by AI-assisted development: I'm the editor and product owner,
+    and the AI does the typing.
+  </p>
+
+  <h2>1. Start with real data</h2>
+  <p>
+    The buildings come from the City of Vancouver's open data portal. Its 2015 footprints give accurate outlines but no heights.
+    The 2009 dataset has heights, including the stepped shapes of podiums and towers. OpenStreetMap fills in towers built after
+    both datasets were published. A script in the repo stitches the three together:
+  </p>
+  <ol>
+    <li>If 2009 parts cover most of a 2015 footprint, it's the same building, so use the 2009 stepped shape.</li>
+    <li>Otherwise use the 2015 outline with a height from OpenStreetMap, or an estimate if nobody has one.</li>
+    <li>If OpenStreetMap says the site is now much taller, treat it as a redevelopment and use that geometry.</li>
+    <li>Any OpenStreetMap building that matches no 2015 footprint is new, so add it.</li>
+  </ol>
+  <p>
+    The script runs on my machine, not in your browser. It crops to the view from the Olympic Village seawall, simplifies every
+    outline, and writes one compact data file. The page never calls the city's servers.
+  </p>
+  <p>
+    The North Shore mountains use real terrain from Canada's national elevation model, and the shoreline, bridge, SkyTrain line,
+    marinas and street grid all come from the same pipeline.
+  </p>
+
+  <h2>2. Hand-build what data can't describe</h2>
+  <p>
+    Footprints don't know about domes, saucers or glowing rings. BC Place, Science World and Harbour Centre are modelled by hand
+    as simple shapes and placed with their real coordinates, so they read at a glance. Those same landmarks double as the site's
+    navigation: BC Place leads to Experience, Harbour Centre to About, and so on.
+  </p>
+
+  <h2>3. Make it look like a photograph</h2>
+  <p>
+    I decided early that this should look real, not stylized. It's blue hour, about twenty minutes after sunset. The theme
+    colours, orange and black, come from the lighting and the interface rather than from painting buildings orange.
+    Windows are generated floor by floor, with some lit and some dark. Red lights blink on the tallest towers. The water
+    reflects the city, and there's bloom, fog and a little film grain to finish.
+  </p>
+  <p>
+    Several choices came from looking at the picture and arguing with it. The camera started 40 metres up. At 100 metres the
+    downtown core and signature towers clear Yaletown, so that's where it sits now.
+  </p>
+
+  <h2>4. Keep it fast</h2>
+  <ul>
+    <li><strong>A poster first.</strong> A pre-rendered image of the same view loads instantly. The 3D scene fades in over it.</li>
+    <li><strong>Load 3D late.</strong> It starts on the first scroll, touch or key press, or a few seconds after the page loads, so it stays out of the critical loading window.</li>
+    <li><strong>Adaptive quality.</strong> The scene measures its own frame rate and steps down detail if it's struggling. Phones idle at 30 frames per second and cap their pixel density.</li>
+    <li><strong>Draw less.</strong> Buildings out of view aren't drawn, and distant ones use simpler detail.</li>
+  </ul>
+  <p>
+    The result: about 490 KB gzipped for all hero code and data, against a 700 KB budget, and a mobile Lighthouse performance
+    score of 99 on the homepage when I last measured it.
+  </p>
+
+  <h2>5. Always have a way out</h2>
+  <p>
+    If someone prefers reduced motion, has no WebGL or has JavaScript off, they get the still poster and the normal navigation.
+    There's a visible "Skip to work" link, the landmarks are reachable by keyboard, and there's a plain menu. A cool effect
+    shouldn't be the only way in.
+  </p>
+
+  <h2>What's still rough</h2>
+  <p>
+    Heights are only as good as the datasets. The City publishes 2022 LiDAR that would give accurate current heights, but its
+    download server blocks scripts, so those tiles have to be fetched by hand in a browser. That's the next upgrade. Some
+    newer towers are also approximated from OpenStreetMap.
+  </p>
+
+  <h2>What I took from it</h2>
+  <p>
+    The biggest lesson was about translation. Most of the work wasn't code. It was deciding what "realistic" means, choosing
+    which data to trust, setting a performance budget and checking the result against it. Those are the same skills I use
+    between business teams and developers every day.
+  </p>
+
+  <p class="credit">
+    Data: City of Vancouver Open Data (Open Government Licence – Vancouver), © OpenStreetMap contributors (ODbL), and Natural
+    Resources Canada's elevation model. Full attribution is in the footer. The code is on
+    <a href="https://github.com/realjacobvanluven/jacobvanluven-site">GitHub</a>.
+  </p>
+</BaseLayout>
+
+<style>
+  .lede {
+    max-width: 44rem;
+    font-size: 1.1875rem;
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: 0.75rem;
+    margin: 2rem 0;
+  }
+
+  .facts div {
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+  }
+
+  .facts dt {
+    order: 2;
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .facts dd {
+    margin: 0 0 0.25rem;
+    font: 700 1.75rem var(--font-display);
+    color: var(--accent);
+  }
+
+  .facts div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  h2 {
+    margin-top: 2.5rem;
+  }
+
+  .lede,
+  p,
+  ol,
+  ul {
+    max-width: 44rem;
+  }
+
+  li {
+    margin-bottom: 0.4rem;
+  }
+
+  .credit {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+</style>
