@@ -37,6 +37,11 @@ export const TIERS = {
 };
 export const TIER_ORDER = ['high', 'medium', 'low'];
 
+/** Portrait screens use the phone framing (BC Place centred); landscape uses the desktop framing. */
+export const framingFor = (aspect) => (aspect < 1 ? FRAMING.phone : FRAMING.desktop);
+/** Where scrolling turns the camera: Science World sits ~60° east of north, so end with it in frame. */
+export const TURN_BEARING = { desktop: 38, phone: 56 };
+
 const SCENE_DETAIL = {
   desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400 },
   phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600 },
@@ -71,9 +76,9 @@ const angleDiff = (a, b) => ((a - b + 540) % 360) - 180;
 /**
  * @param {{ canvas, width, height, layout: 'desktop'|'phone', tier?: string, dataUrl?: string, terrain?: 'dem'|'procedural', maxPixelRatio?: number }} opts
  */
-export async function createSkylineScene({ canvas, width, height, layout = 'desktop', tier, dataUrl = '/data/skyline.json', terrain = 'dem', maxPixelRatio = Infinity, devicePixelRatio }) {
+export async function createSkylineScene({ canvas, width, height, layout = 'desktop', tier, dataUrl = '/data/skyline.json', terrain = 'dem', maxPixelRatio = Infinity, devicePixelRatio, preserveDrawingBuffer = false }) {
   const detail = SCENE_DETAIL[layout];
-  const framing = FRAMING[layout];
+  let framing = framingFor(width / height);
   let tierName = tier ?? (layout === 'phone' ? 'medium' : 'high');
   let q = TIERS[tierName];
   const timings = {};
@@ -81,7 +86,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const devicePR = devicePixelRatio ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
   const prFor = (t) => Math.min(t.pixelRatio, Math.max(1, devicePR), maxPixelRatio);
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer });
   renderer.setPixelRatio(prFor(q));
   renderer.setSize(width, height, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -94,6 +99,15 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     camera.lookAt(camera.position.x + Math.sin(b) * Math.cos(p), CAMERA_HEIGHT + Math.sin(p), camera.position.z - Math.cos(b) * Math.cos(p));
   };
   aim(framing.bearing, framing.pitch);
+  /** Point the camera: bearing/pitch in degrees, fov (vertical, degrees) optional. */
+  const look = ({ bearing, pitch, fov }) => {
+    if (fov !== undefined && fov !== camera.fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+      uniforms.uTanHalfFov.value = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+    }
+    aim(bearing, pitch);
+  };
 
   const uniforms = {
     uSunDir: { value: new THREE.Vector3(...sunDirection()) },
@@ -118,8 +132,12 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.fog = new THREE.FogExp2(new THREE.Color(0.04, 0.06, 0.14), uniforms.uFogDensity.value);
   timings.setup = performance.now() - t0;
 
+  // Yield to the browser between construction stages so no single task blocks input for long.
+  const breathe = () => new Promise((r) => setTimeout(r, 0));
+  await breathe();
   let t = performance.now();
   const data = await loadSkyline(dataUrl);
+  await breathe();
   timings.loadData = performance.now() - t;
   const L = data.landmarks;
   const isWater = data.waterMask.isWater;
@@ -151,6 +169,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.add(buildings);
   timings.buildingsWorker = performance.now() - t;
 
+  await breathe();
   t = performance.now();
   const lights = []; // { p, color, size, priority } — lower priority are dropped first on low tiers
   const addLights = (list, priority) => list.forEach((l) => lights.push({ ...l, priority }));
@@ -171,10 +190,23 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     addLights(sw.lights.map((p) => ({ p, color: [3.2, 3.4, 3.8], size: 0.45 })), 1);
   }
 
+  // Hotspot anchors (world coordinates) for the interactive hero.
+  const anchors = {};
+  if (L.bcPlace) anchors.bcPlace = [L.bcPlace.center[0], 64, -L.bcPlace.center[1]];
+  if (L.harbourCentre) anchors.harbourCentre = [L.harbourCentre.center[0], 172, -L.harbourCentre.center[1]];
+  if (L.scienceWorld) anchors.scienceWorld = [L.scienceWorld.center[0], L.scienceWorld.top + 8, -L.scienceWorld.center[1]];
+  // A prominent downtown tower: the tallest in the desktop frame, within 1.6 km.
+  const tower = buildingList
+    .filter((b) => distanceTo(b.c) < 1600 && Math.abs(angleDiff(bearingTo(b.c), FRAMING.desktop.bearing)) < 22)
+    .reduce((best, b) => (!best || b.h > best.h ? b : best), null);
+  if (tower) anchors.tower = [tower.c[0], tower.h + 6, -tower.c[1]];
+
+  await breathe();
   const water = createWater(uniforms, data.waterMask, { reflectionScale: q.reflectionScale, width, height, pixelRatio: renderer.getPixelRatio() });
   scene.add(water);
   scene.add(createGround(uniforms));
 
+  await breathe();
   const seawall = createSeawall(data.shoreline, uniforms, { camera: CAMERA_POSITION, isWater });
   scene.add(seawall.group);
   addLights(seawall.lamps, 0);
@@ -188,6 +220,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   }
 
   // Keep the water right below the camera calm (it holds the headline on phones): no boats within 220 m.
+  await breathe();
   const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, envMap });
   scene.add(boats.group);
   addLights(boats.lights, 2);
@@ -212,6 +245,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     addLights(ab.lights, 1);
   }
 
+  await breathe();
   const dem = terrain === 'dem' ? data.terrain : null;
   const vScale = dem ? MOUNTAIN_EXAGGERATION : 1;
   const heightAt = dem ? (x, y) => demHeightAt(dem, x, y) * vScale : terrainHeight;
@@ -247,13 +281,49 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     points.geometry.setDrawRange(0, Math.round(lights.length * q.lightShare));
   }
   applyTier(tierName);
+  // Compile all shaders up front, in parallel where the browser supports it (KHR_parallel_shader_compile),
+  // instead of stalling the first frame.
+  await breathe();
+  try { await renderer.compileAsync(scene, camera); } catch { /* falls back to compiling on first render */ }
   timings.total = performance.now() - t0;
 
+  /** Resize the canvas drawing buffer and everything that depends on it; switches framing by aspect. */
+  function setSize(w, h) {
+    width = w; height = h;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    framing = framingFor(w / h);
+    applyTier(tierName);
+  }
+
+  const v3 = new THREE.Vector3();
+  /** Screen position (CSS px, relative to the canvas) of a hotspot anchor, or null if behind the camera. */
+  function project(id) {
+    const a = anchors[id];
+    if (!a) return null;
+    v3.set(a[0], a[1], a[2]).project(camera);
+    if (v3.z > 1 || v3.z < -1) return null;
+    return { x: ((v3.x + 1) / 2) * width, y: ((1 - v3.y) / 2) * height };
+  }
+  /** Camera bearing/pitch (degrees) that looks straight at a hotspot anchor. */
+  function viewOf(id) {
+    const a = anchors[id];
+    if (!a) return null;
+    const dx = a[0] - camera.position.x, dz = a[2] - camera.position.z, dy = a[1] - 12 - camera.position.y;
+    return {
+      bearing: ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360,
+      pitch: (Math.atan2(dy, Math.hypot(dx, dz)) * 180) / Math.PI,
+    };
+  }
+
   return {
-    renderer, scene, camera, composer, passes, water, uniforms, points,
+    renderer, scene, camera, composer, passes, water, uniforms, points, anchors, project, viewOf,
     get tier() { return tierName; },
+    get framing() { return framing; },
     setTier: applyTier,
+    setSize,
     aim,
+    look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
       ferries: ferrySpots.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,

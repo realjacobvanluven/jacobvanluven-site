@@ -1,0 +1,481 @@
+---
+/**
+ * Homepage hero: the Vancouver skyline at blue hour.
+ *
+ * Progressive enhancement:
+ *  - Always: a pre-rendered poster (the LCP image) + the headline + "Skip to work". Works without JS.
+ *  - With JS, WebGL and no reduced-motion preference: after the page has loaded, the live 3D scene
+ *    (src/hero/, three.js, /data/skyline.json) loads in its own chunk and fades in over the poster.
+ *    Scrolling through the hero turns the camera from downtown toward Science World; the cursor (desktop)
+ *    or device tilt (phones) adds a gentle look-around. Landmarks are hotspot links: hover/focus shows the
+ *    label, click flies the camera in and then opens the page.
+ */
+import { getImage } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import posterDesktop from '../assets/hero/poster-desktop.jpg';
+import posterPhone from '../assets/hero/poster-phone.jpg';
+
+interface Props {
+  title: string;
+  subheading: string;
+}
+const { title, subheading } = Astro.props;
+
+const srcset = async (src: ImageMetadata, widths: number[]) =>
+  (await Promise.all(widths.map((width) => getImage({ src, width, format: 'webp' })))).map((img, i) => `${img.src} ${widths[i]}w`).join(', ');
+const desktopSet = await srcset(posterDesktop, [960, 1440, 1920, 2880]);
+const phoneSet = await srcset(posterPhone, [390, 585, 780]);
+const fallback = await getImage({ src: posterDesktop, width: 1440, format: 'webp' });
+
+// Landmark hotspots → site sections. Science World is "the lab" (Tools) once a tool is published;
+// until then it leads to the Comms work.
+const hasTools = (await getCollection('tools', (t) => !t.data.draft)).length > 0;
+const hotspots = [
+  { id: 'bcPlace', place: 'BC Place', label: 'Experience', href: '/experience/' },
+  { id: 'tower', place: 'Downtown', label: 'Journalism', href: '/journalism/' },
+  { id: 'harbourCentre', place: 'Harbour Centre', label: 'About & contact', href: '/about/' },
+  hasTools
+    ? { id: 'scienceWorld', place: 'Science World', label: 'Tools', href: '/tools/' }
+    : { id: 'scienceWorld', place: 'Science World', label: 'Comms', href: '/comms/' },
+];
+---
+
+<section class="hero" data-hero aria-labelledby="hero-title">
+  <div class="stage" data-stage>
+    <picture class="poster">
+      <source media="(orientation: portrait)" type="image/webp" srcset={phoneSet} sizes="100vw" />
+      <source type="image/webp" srcset={desktopSet} sizes="100vw" />
+      <img
+        src={fallback.src}
+        alt="A rendering of downtown Vancouver at blue hour, seen across False Creek from Olympic Village: lit towers, BC Place with its orange ring, and the North Shore mountains."
+        width={posterDesktop.width}
+        height={posterDesktop.height}
+        fetchpriority="high"
+        decoding="async"
+      />
+    </picture>
+    <canvas class="scene" data-canvas aria-hidden="true"></canvas>
+    <div class="shade" aria-hidden="true"></div>
+
+    <nav class="hotspots" aria-label="Explore the skyline" data-hotspots>
+      {
+        hotspots.map((h) => (
+          <a class="hotspot" href={h.href} data-hotspot={h.id} hidden>
+            <span class="dot" aria-hidden="true" />
+            <span class="tag">
+              <span class="place">{h.place}</span>
+              <span class="section">{h.label}</span>
+            </span>
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="copy" data-copy>
+      <p class="label">Jacob Van Luven</p>
+      <h1 id="hero-title">{title}</h1>
+      <p class="subheading">{subheading}</p>
+      <a class="skip" href="#work">Skip to work <span aria-hidden="true">↓</span></a>
+    </div>
+
+    <button class="tilt" type="button" data-tilt hidden>Tilt to look around</button>
+  </div>
+</section>
+
+<style>
+  .hero {
+    position: relative;
+    height: 100svh;
+    min-height: 32rem;
+  }
+
+  /* Room to scroll the camera turn. Set before first paint (BaseLayout) so nothing shifts later. */
+  :global(html.hero-motion) .hero {
+    height: 210svh;
+  }
+
+  .stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    min-height: 32rem;
+    overflow: hidden;
+    background: #060914;
+  }
+
+  .poster img,
+  .scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .scene {
+    opacity: 0;
+    transition: opacity 1.2s ease;
+  }
+
+  .scene.ready {
+    opacity: 1;
+  }
+
+  /* Legibility: darken the top (nav) and bottom (headline) a little. */
+  .shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent 18%),
+      linear-gradient(to top, rgb(4 6 14 / 0.75), transparent 45%);
+  }
+
+  .stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease;
+  }
+
+  .stage.leaving::after {
+    opacity: 1;
+  }
+
+  .copy {
+    position: absolute;
+    left: var(--gutter);
+    right: var(--gutter);
+    bottom: clamp(2rem, 9svh, 6rem);
+    max-width: 44rem;
+    text-shadow: 0 2px 18px rgb(0 0 0 / 0.6);
+  }
+
+  .copy h1 {
+    font-size: clamp(2rem, 5.2vw, 3.75rem);
+    margin: 0 0 0.75rem;
+  }
+
+  .label {
+    margin: 0 0 0.75rem;
+    color: var(--accent-soft);
+  }
+
+  .subheading {
+    font-family: var(--font-display);
+    font-size: clamp(1.15rem, 2.6vw, 1.5rem);
+    color: var(--accent);
+    margin: 0 0 1.25rem;
+  }
+
+  .skip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 1.1rem;
+    border: 1px solid rgb(255 255 255 / 0.35);
+    border-radius: 999px;
+    background: rgb(10 10 10 / 0.45);
+    color: var(--text);
+    font: 500 0.875rem var(--font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    text-shadow: none;
+    backdrop-filter: blur(6px);
+  }
+
+  .skip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .hotspots {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .hotspot {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem; /* generous touch target around the dot */
+    margin: -1.375rem 0 0 -1.375rem;
+    color: var(--text);
+    text-decoration: none;
+    pointer-events: auto;
+    will-change: transform;
+  }
+
+  .hotspot[hidden] {
+    display: none;
+  }
+
+  .dot {
+    position: relative;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: 999px;
+    border: 2px solid var(--accent);
+    background: rgb(255 122 26 / 0.18);
+    box-shadow: 0 0 12px rgb(255 122 26 / 0.6);
+  }
+
+  .dot::after {
+    content: '';
+    position: absolute;
+    inset: 0.45rem;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .dot {
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+  }
+
+  @keyframes pulse {
+    50% {
+      box-shadow: 0 0 22px rgb(255 122 26 / 0.95);
+    }
+  }
+
+  .tag {
+    display: grid;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    background: rgb(8 8 10 / 0.78);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-0.25rem);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .place {
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .section {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .hotspot:hover .tag,
+  .hotspot:focus-visible .tag {
+    opacity: 1;
+    transform: none;
+  }
+
+  .hotspot:focus-visible {
+    outline: none;
+  }
+
+  .hotspot:focus-visible .dot {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  /* Touch screens have no hover: show the labels. */
+  @media (hover: none) {
+    .tag {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .tilt {
+    position: absolute;
+    right: var(--gutter);
+    bottom: clamp(2rem, 9svh, 6rem);
+    min-height: 2.75rem;
+    padding: 0 0.9rem;
+    border: 1px solid rgb(255 255 255 / 0.3);
+    border-radius: 999px;
+    background: rgb(10 10 10 / 0.5);
+    color: var(--text-muted);
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .tilt[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 40rem) {
+    .tilt {
+      bottom: auto;
+      top: 5rem;
+    }
+  }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-hero]');
+  const html = document.documentElement;
+  const motionOK = window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+
+  function webglAvailable() {
+    try {
+      const c = document.createElement('canvas');
+      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Start the 3D scene on the first sign of a visitor (scroll, pointer, touch, key) or ~4 s after load,
+   * whichever comes first. The poster shows the same view meanwhile, so there's no visible gap, and the
+   * heavy work stays out of the critical loading window.
+   */
+  function whenEngaged(fn: () => void) {
+    let done = false;
+    const events = ['scroll', 'pointermove', 'pointerdown', 'touchstart', 'keydown', 'wheel'];
+    const go = () => {
+      if (done) return;
+      done = true;
+      events.forEach((t) => window.removeEventListener(t, go));
+      fn();
+    };
+    events.forEach((t) => window.addEventListener(t, go, { passive: true, once: true }));
+    const timer = () => setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(go, { timeout: 1500 }) : go()), 4000);
+    if (document.readyState === 'complete') timer();
+    else window.addEventListener('load', timer, { once: true });
+  }
+
+  if (root && motionOK && webglAvailable()) whenEngaged(() => start(root));
+  else html.classList.remove('hero-motion');
+
+  async function start(root: HTMLElement) {
+    const stage = root.querySelector<HTMLElement>('[data-stage]')!;
+    const canvas = root.querySelector<HTMLCanvasElement>('[data-canvas]')!;
+    const copy = root.querySelector<HTMLElement>('[data-copy]')!;
+    const tiltButton = root.querySelector<HTMLButtonElement>('[data-tilt]')!;
+    const spots = [...root.querySelectorAll<HTMLAnchorElement>('[data-hotspot]')];
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const isPhone = coarse && Math.min(screen.width, screen.height) < 820;
+
+    const [{ startHero }, { TURN_BEARING }] = await Promise.all([import('../hero/runtime.js'), import('../hero/scene.js')]);
+
+    // Look-around input, smoothed per frame.
+    const look = { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 };
+    if (!coarse) {
+      window.addEventListener('pointermove', (e) => {
+        look.targetYaw = (e.clientX / innerWidth - 0.5) * 6;
+        look.targetPitch = -(e.clientY / innerHeight - 0.5) * 2;
+      }, { passive: true });
+    }
+    const onTilt = (e: DeviceOrientationEvent) => {
+      if (e.gamma === null) return;
+      look.targetYaw = Math.max(-1, Math.min(1, e.gamma / 25)) * 8;
+    };
+    const DOE = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> } | undefined;
+    if (coarse && DOE) {
+      if (typeof DOE.requestPermission === 'function') {
+        // iOS: permission must come from a tap. If declined, the hero just stays still.
+        tiltButton.hidden = false;
+        tiltButton.addEventListener('click', async () => {
+          tiltButton.hidden = true;
+          try {
+            if ((await DOE.requestPermission!()) === 'granted') window.addEventListener('deviceorientation', onTilt);
+          } catch { /* no tilt */ }
+        }, { once: true });
+      } else {
+        window.addEventListener('deviceorientation', onTilt);
+      }
+    }
+
+    // Fly-to animation when a hotspot is followed.
+    type View = { bearing: number; pitch: number; fov: number };
+    let flight: { from: View; to: View; t0: number; href: string } | null = null;
+    let current: View | null = null;
+    const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+    const angleLerp = (a: number, b: number, t: number) => a + ((((b - a) % 360) + 540) % 360 - 180) * t;
+    const FLIGHT_MS = 1100;
+
+    let ctl: Awaited<ReturnType<typeof startHero>>;
+    try {
+      ctl = await startHero({
+        canvas,
+        container: stage,
+        layout: isPhone ? 'phone' : 'desktop',
+        dataUrl: '/data/skyline.json',
+        onFrame(hero, now) {
+          const r = root.getBoundingClientRect();
+          const range = Math.max(1, r.height - innerHeight);
+          const p = Math.min(1, Math.max(0, -r.top / range));
+          const turn = p * p * (3 - 2 * p);
+          const portrait = innerWidth < innerHeight;
+          const f = hero.framing;
+          look.yaw += (look.targetYaw - look.yaw) * 0.08;
+          look.pitch += (look.targetPitch - look.pitch) * 0.08;
+
+          let view: View = {
+            bearing: angleLerp(f.bearing, portrait ? TURN_BEARING.phone : TURN_BEARING.desktop, turn) + look.yaw,
+            pitch: f.pitch + look.pitch,
+            fov: f.fov,
+          };
+          if (flight) {
+            const t = Math.min(1, (now - flight.t0) / FLIGHT_MS);
+            const k = ease(t);
+            view = {
+              bearing: angleLerp(flight.from.bearing, flight.to.bearing, k),
+              pitch: flight.from.pitch + (flight.to.pitch - flight.from.pitch) * k,
+              fov: flight.from.fov + (flight.to.fov - flight.from.fov) * k,
+            };
+            ctl?.poke();
+            if (t > 0.6) stage.classList.add('leaving'); // fade to black over the last part of the flight
+            if (t >= 1) { const href = flight.href; flight = null; window.location.assign(href); }
+          }
+          current = view;
+          hero.look(view);
+          copy.style.opacity = String(Math.max(0, 1 - turn * 2.4));
+          copy.style.visibility = turn > 0.45 ? 'hidden' : '';
+
+          for (const a of spots) {
+            const pt = hero.project(a.dataset.hotspot!);
+            const show = !!pt && pt.x > 24 && pt.x < innerWidth - 24 && pt.y > 70 && pt.y < innerHeight - 24;
+            if (a.hidden === show) a.hidden = !show;
+            if (show) a.style.transform = `translate(${pt!.x.toFixed(1)}px, ${pt!.y.toFixed(1)}px)`;
+          }
+        },
+      });
+    } catch (err) {
+      console.warn('Skyline hero unavailable, keeping the still image.', err);
+      html.classList.remove('hero-motion');
+      return;
+    }
+
+    canvas.classList.add('ready');
+
+    for (const a of spots) {
+      a.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || flight || !current) return;
+        const target = ctl.hero.viewOf(a.dataset.hotspot!);
+        if (!target) return;
+        e.preventDefault();
+        flight = { from: current, to: { ...target, fov: current.fov * 0.45 }, t0: performance.now(), href: a.href };
+        ctl.poke();
+      });
+    }
+    // Coming back via the browser's back/forward cache: undo the fade.
+    window.addEventListener('pageshow', () => stage.classList.remove('leaving'));
+  }
+</script>

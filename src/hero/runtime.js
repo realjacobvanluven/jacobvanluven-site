@@ -8,7 +8,7 @@ import { createSkylineScene, TIER_ORDER } from './scene.js';
  * - Pause when the hero is scrolled off-screen or the tab is hidden.
  * - Phones: 30 fps while idle, full rate for a moment after any interaction (pointer, touch, scroll, tilt).
  */
-export async function startHero({ canvas, container = canvas, layout, dataUrl, onTierChange } = {}) {
+export async function startHero({ canvas, container = canvas, layout, dataUrl, onTierChange, onFrame } = {}) {
   const isPhone = layout === 'phone';
   const rect = container.getBoundingClientRect();
   const hero = await createSkylineScene({ canvas, width: Math.round(rect.width), height: Math.round(rect.height), layout, dataUrl });
@@ -36,6 +36,7 @@ export async function startHero({ canvas, container = canvas, layout, dataUrl, o
     // Allow a little slack so a 60 Hz display still hits a 30 fps cap every other frame.
     if (now - lastFrame < 1000 / fpsCap - 2) return;
     lastFrame = now;
+    onFrame?.(hero, now);
     hero.render((now - start) / 1000);
 
     if (!measuring) return;
@@ -70,6 +71,13 @@ export async function startHero({ canvas, container = canvas, layout, dataUrl, o
     }
   }
 
+  // Follow the container's size (rotation, window resize).
+  const ro = new ResizeObserver(([entry]) => {
+    const { width, height } = entry.contentRect;
+    if (width > 0 && height > 0) hero.setSize(Math.round(width), Math.round(height));
+  });
+  ro.observe(container);
+
   const io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; update(); });
   io.observe(container);
   const onVisibility = () => { pageVisible = !document.hidden; update(); };
@@ -79,10 +87,13 @@ export async function startHero({ canvas, container = canvas, layout, dataUrl, o
 
   return {
     hero,
+    /** Keep full frame rate for a moment (e.g. during a camera animation). */
+    poke: markInteraction,
     stop() {
       running = false;
       cancelAnimationFrame(raf);
       io.disconnect();
+      ro.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       for (const type of ['pointermove', 'pointerdown', 'touchstart', 'wheel', 'scroll', 'keydown', 'deviceorientation']) {
         window.removeEventListener(type, markInteraction);

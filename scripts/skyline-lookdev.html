@@ -30,7 +30,9 @@ import { startHero } from '/src/hero/runtime.js';
 
 const params = new URLSearchParams(location.search);
 const layout = params.get('preset') ?? 'desktop';
-const [width, height] = layout === 'phone' ? [375, 812] : [1600, 900];
+// &w=…&h=…&dpr=… override the size (used to render the homepage posters).
+const [width, height] = params.get('w') ? [+params.get('w'), +params.get('h')] : layout === 'phone' ? [375, 812] : [1600, 900];
+const dprOverride = params.get('dpr') ? +params.get('dpr') : null;
 const canvas = document.getElementById('c');
 canvas.style.width = width + 'px';
 canvas.style.height = height + 'px';
@@ -50,9 +52,10 @@ try {
       canvas, width, height, layout, dataUrl: '/public/data/skyline.json',
       terrain: params.get('terrain') ?? 'dem',
       // Stills: desktop at 1600×900 exactly; phone at its starting tier (1.5× density).
-      maxPixelRatio: layout === 'phone' ? 1.5 : 1,
-      devicePixelRatio: layout === 'phone' ? 3 : 1, // simulate a phone screen in the headless capture
-      tier: layout === 'phone' ? 'medium' : 'high',
+      maxPixelRatio: dprOverride ?? (layout === 'phone' ? 1.5 : 1),
+      devicePixelRatio: dprOverride ?? (layout === 'phone' ? 3 : 1), // simulate a phone screen in the headless capture
+      preserveDrawingBuffer: true,
+      tier: params.get('tier') ?? (layout === 'phone' ? 'medium' : 'high'),
     });
     if (params.get('bearing')) s.aim(+params.get('bearing'), +(params.get('pitch') ?? 0)); // comparison views
     s.render(3.0);

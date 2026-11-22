@@ -85,6 +85,12 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 - **Navigation:** landmarks are hotspots for site sections. Starting mapping (adjust if something reads better):
   Science World → Tools (the lab), BC Place → Experience, Harbour Centre → About & Contact (the lookout),
   a prominent downtown tower → Journalism, another → Comms work.
+  *Built (2026-11-21):* BC Place → /experience/, tallest downtown tower in frame → /journalism/, Harbour Centre →
+  /about/, Science World → /comms/ until the first tool is published, then /tools/ (automatic).
+- **Implementation (2026-11-21):** `src/components/Hero.astro` (poster `<picture>` + hotspot links + headline) loads
+  `src/hero/` lazily: on first scroll/pointer/touch/key or ~4 s after load, so the 3D work stays out of the loading
+  window (Lighthouse mobile 99). Posters in `src/assets/hero/` are rendered with `scripts/skyline-lookdev.html`
+  (`&w=…&h=…&dpr=…`); re-render them whenever the scene's look changes.
   Hover/tap highlights + labels; click flies the camera in, then routes.
 - **Scroll:** scrolling moves the camera through/along the city into the content.
 - **Mobile:** device-tilt parallax (with the iOS permission prompt handled gracefully), tap hotspots,

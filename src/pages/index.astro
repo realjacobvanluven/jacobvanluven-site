@@ -1,33 +1,99 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Todo from '../components/Todo.astro';
+import Hero from '../components/Hero.astro';
 ---
 
 <BaseLayout>
-  {/* TODO: cityscape hero (not started). */}
-  <section class="intro">
-    <p class="label">Jacob Van Luven</p>
-    <h1>I translate between business and tech — and build the tools to prove it.</h1>
-    <p class="subheading">Clear stories. Working tools.</p>
+  <Hero
+    slot="hero"
+    title="I translate between business and tech — and build the tools to prove it."
+    subheading="Clear stories. Working tools."
+  />
+
+  <section id="work" class="work" aria-labelledby="work-h">
+    <h2 id="work-h" class="visually-hidden">Work</h2>
     <p class="lede">
       I'm Jacob Van Luven, a Client Success Specialist at BCI in Vancouver. I started in journalism, moved into
       communications, and now work between business teams and developers — turning complex technology into plain
       language, and building my own tools along the way.
     </p>
-    <Todo>TODO: highlights.</Todo>
+    <ul class="cards">
+      <li>
+        <a href="/experience/">
+          <span class="label">Experience</span>
+          <span class="card-title">BCI and the Emergency Planning Secretariat</span>
+        </a>
+      </li>
+      <li>
+        <a href="/journalism/">
+          <span class="label">Journalism</span>
+          <span class="card-title">Deadline news, features, audio, video and data</span>
+        </a>
+      </li>
+      <li>
+        <a href="/comms/">
+          <span class="label">Comms</span>
+          <span class="card-title">Emergency-preparedness campaigns, videos and the Preparedness Series</span>
+        </a>
+      </li>
+      <li>
+        <a href="/about/">
+          <span class="label">About</span>
+          <span class="card-title">Background, education and side projects</span>
+        </a>
+      </li>
+    </ul>
   </section>
 </BaseLayout>
 
 <style>
-  .subheading {
-    font-family: var(--font-display);
-    font-size: clamp(1.25rem, 3vw, 1.625rem);
-    color: var(--accent);
-    margin: 0 0 1.5rem;
+  .work {
+    scroll-margin-top: 1rem;
   }
 
   .lede {
     max-width: 40rem;
+    font-size: 1.1875rem;
+    margin: 0 0 2.5rem;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .cards li {
+    max-width: none;
+  }
+
+  .cards a {
+    display: grid;
+    gap: 0.4rem;
+    height: 100%;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .cards a:hover {
+    border-color: var(--accent);
+  }
+
+  .cards .label {
+    margin: 0;
+  }
+
+  .card-title {
+    font-family: var(--font-display);
     font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
   }
 </style>

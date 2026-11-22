@@ -46,6 +46,19 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     border-bottom: 1px solid var(--border);
   }
 
+  /* Over the homepage hero: float on top of the scene, no rule underneath. */
+  :global(body.has-hero) .site-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    border-bottom: 0;
+  }
+
+  :global(body.has-hero) nav a:not([aria-current='page']) {
+    color: var(--text);
+  }
+
   .wordmark {
     font-family: var(--font-display);
     font-weight: 700;
