@@ -101,7 +101,10 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
 
         // Ripples wobble the reflection: strongest close to the camera, gentler far away.
         vec4 uv = vUv;
-        float wobble = clamp(260.0 / dist, 0.2, 1.0);
+        // Far water (Burrard Inlet, 2–4 km out) stays nearly still and its streaks short, otherwise the
+        // North Shore lights smear into a glowing wall.
+        float wobble = clamp(260.0 / dist, 0.03, 1.0);
+        float streak = 0.009 * clamp(500.0 / dist, 0.12, 1.0);
         uv.x += slope.x * 0.045 * wobble * uv.w;
         uv.y += slope.y * 0.08 * wobble * uv.w;
         vec3 refl = vec3(0.0);
@@ -109,13 +112,13 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
         for (int k = -3; k <= 4; k++) {
           float fk = float(k);
           float wk = exp(-fk * fk * 0.12);
-          refl += texture2DProj(tDiffuse, uv + vec4(0.0, fk * 0.009 * uv.w, 0.0, 0.0)).rgb * wk;
+          refl += texture2DProj(tDiffuse, uv + vec4(0.0, fk * streak * uv.w, 0.0, 0.0)).rgb * wk;
           wsum += wk;
         }
         refl /= wsum;
 
         vec3 deep = vec3(0.003, 0.007, 0.013);
-        vec3 col = deep + refl * mix(0.35, 0.85, fres);
+        vec3 col = deep + refl * mix(0.35, 0.85, fres) * mix(1.0, 0.6, smoothstep(1500.0, 3500.0, dist));
         // Glints: tiny shimmering highlights where ripples catch a bright reflection.
         float lum = dot(refl, vec3(0.299, 0.587, 0.114));
         vec2 gp = local * 2.2 + vec2(uTime * 0.7, -uTime * 0.45);
