@@ -77,7 +77,7 @@ export function demHeightAt(dem, x, y) {
  * North Shore mountains. With `dem` (real elevation grid from the data file) the mesh follows the actual
  * terrain; without it, the procedural range above is used. `stride` skips grid points on low tiers.
  */
-export function createMountains(uniforms, { dem = null, stride = 1, segmentsX = 180, segmentsY = 110 } = {}) {
+export function createMountains(uniforms, { dem = null, stride = 1, segmentsX = 180, segmentsY = 110, verticalScale = 1 } = {}) {
   let g;
   if (dem) {
     const cols = Math.floor((dem.cols - 1) / stride) + 1, rows = Math.floor((dem.rows - 1) / stride) + 1;
@@ -102,9 +102,10 @@ export function createMountains(uniforms, { dem = null, stride = 1, segmentsX = 
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
       varying vec3 vNormal;
+      varying float vElevation; // real elevation (before any vertical exaggeration)
       void main() {
         vec4 w = modelMatrix * vec4(position, 1.0);
-        vWorld = w.xyz; vNormal = normal;
+        vWorld = w.xyz; vNormal = normalize(mat3(modelMatrix) * normal); vElevation = position.y;
         gl_Position = projectionMatrix * viewMatrix * w;
       }
     `,
@@ -114,12 +115,13 @@ export function createMountains(uniforms, { dem = null, stride = 1, segmentsX = 
       uniform float uMountainHaze;
       varying vec3 vWorld;
       varying vec3 vNormal;
+      varying float vElevation;
       void main() {
         vec3 n = normalize(vNormal);
         vec3 sunFlat = normalize(vec3(uSunDir.x, 0.0, uSunDir.z));
         // Snow above ~1100 m, patchy, mostly on gentler slopes.
         float snowPatch = hash12(floor(vWorld.xz / 50.0)) * 160.0;
-        float snow = smoothstep(1050.0, 1200.0, vWorld.y + snowPatch) * smoothstep(0.5, 0.85, n.y);
+        float snow = smoothstep(1050.0, 1200.0, vElevation + snowPatch) * smoothstep(0.5, 0.85, n.y);
         vec3 forest = vec3(0.0025, 0.0045, 0.0065);
         vec3 snowCol = vec3(0.07, 0.06, 0.08);           // faintly pink in the afterglow
         vec3 base = mix(forest, snowCol, snow);
@@ -131,12 +133,14 @@ export function createMountains(uniforms, { dem = null, stride = 1, segmentsX = 
         vec3 v = vWorld - cameraPosition;
         float dist = length(v);
         float haze = 1.0 - exp(-dist * uMountainHaze);
-        haze = clamp(haze + (1.0 - smoothstep(0.0, 600.0, vWorld.y)) * 0.08, 0.0, 0.9);
+        haze = clamp(haze + (1.0 - smoothstep(0.0, 600.0, vElevation)) * 0.08, 0.0, 0.9);
         gl_FragColor = vec4(mix(col, hazeColor(v / dist) * 0.45, haze), 1.0);
       }
     `,
   });
-  return new THREE.Mesh(g, material);
+  const mesh = new THREE.Mesh(g, material);
+  mesh.scale.y = verticalScale;
+  return mesh;
 }
 
 /** Scattered house and street lights on the lower North Shore slopes (North and West Vancouver). */

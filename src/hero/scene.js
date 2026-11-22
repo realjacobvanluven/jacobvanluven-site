@@ -18,6 +18,8 @@ import { createComposer } from './post.js';
  * Local metres: x east, y north. bearing: compass degrees; pitch: degrees (negative = down); fov: vertical degrees.
  */
 export const CAMERA_POSITION = [0, 0];
+/** The real North Shore reads small at ~12 km; a gentle vertical exaggeration makes it feel closer. */
+export const MOUNTAIN_EXAGGERATION = 1.2;
 export const CAMERA_HEIGHT = 40;
 export const FRAMING = {
   desktop: { bearing: 320, pitch: -2.6, fov: 35 },
@@ -211,8 +213,9 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   }
 
   const dem = terrain === 'dem' ? data.terrain : null;
-  const heightAt = dem ? (x, y) => demHeightAt(dem, x, y) : terrainHeight;
-  scene.add(createMountains(uniforms, { dem, stride: detail.demStride }));
+  const vScale = dem ? MOUNTAIN_EXAGGERATION : 1;
+  const heightAt = dem ? (x, y) => demHeightAt(dem, x, y) * vScale : terrainHeight;
+  scene.add(createMountains(uniforms, { dem, stride: detail.demStride, verticalScale: vScale }));
   addLights(aviationLights(data.buildings), 0);
   let seed = 11;
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
