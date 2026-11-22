@@ -32,3 +32,6 @@ assets-inbox/*
 
 # downloaded raw open data (scripts/build-skyline-data.mjs)
 scripts/.cache/
+
+# private source material (never published)
+private/
