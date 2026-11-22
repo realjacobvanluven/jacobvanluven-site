@@ -220,6 +220,11 @@ function osm() {
 out tags geom;`);
 }
 
+/** Waterfront and park detail: footpaths, bike paths, parks/lawns/fields, and mapped trees. */
+function osmGround() {
+  return overpass('osm-ground.json', `[out:json][timeout:90];(way["highway"~"^(footway|path|cycleway|pedestrian)$"](${EXTRAS_BBOX});way["leisure"~"^(park|garden|playground|pitch)$"](${EXTRAS_BBOX});way["landuse"~"^(grass|recreation_ground)$"](${EXTRAS_BBOX});node["natural"="tree"](${EXTRAS_BBOX}););out tags geom;`);
+}
+
 /** Downtown streets (for streetlights and traffic). */
 function osmRoads() {
   const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
@@ -298,6 +303,7 @@ function osmRings(el) {
 const [fc2015, fc2009, osmData] = await Promise.all([cityFootprints(2015), cityFootprints(2009), osm()]);
 const extras = await osmExtras();
 const roadsData = await osmRoads();
+const groundData = await osmGround();
 
 const f15 = cityRings(fc2015, false);
 const p09 = cityRings(fc2009, true).filter((p) => p.h);
@@ -447,6 +453,38 @@ for (const e of roadsData.elements) {
 
 const mask = buildWaterMask(shoreLines, MASK);
 
+// Waterfront/park detail near the camera (the most visible ground): paths, green areas, trees.
+const GROUND_RANGE = 1800;
+const nearView = (p) => inView(p) && Math.hypot(...p) < GROUND_RANGE;
+const paths = [];
+const greens = [];
+const treePts = [];
+const GREEN_KIND = { park: 0, garden: 0, grass: 0, recreation_ground: 0, pitch: 1, playground: 2 };
+for (const e of groundData.elements) {
+  const t = e.tags ?? {};
+  if (e.type === 'node' && t.natural === 'tree') {
+    const p = toLocal([e.lon, e.lat]);
+    if (nearView(p) && !mask.isWater(...p)) treePts.push(p);
+    continue;
+  }
+  if (e.type !== 'way' || !e.geometry) continue;
+  const pts = e.geometry.map((q) => toLocal([q.lon, q.lat]));
+  if (t.highway) {
+    if (t.tunnel === 'yes' || t.layer && +t.layer < 0) continue;
+    const line = simplify(pts, 1).filter(nearView);
+    if (line.length >= 2) paths.push([t.highway === 'cycleway' ? 1 : 0, ...encodeRing(line)]);
+  } else {
+    const kind = GREEN_KIND[t.leisure ?? t.landuse];
+    const ring = cleanRing(pts);
+    if (kind === undefined || !ring || area(ring) < 40 || !nearView(centroid(ring))) continue;
+    greens.push([kind, ...encodeRing(ring)]);
+  }
+}
+// Trees sorted by distance (nearest first) so the scene can cap the count per device.
+treePts.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+const trees = encodeRing(treePts);
+
+
 const terrain = await sampleTerrain(TERRAIN, toLonLat, cachedBinary, USER_AGENT);
 // Sea level and below → -4 m so the water plane covers it.
 const terrainRows = [];
@@ -528,6 +566,11 @@ const data = {
   signatures,
   // [class, ...line] (class 0 main road, 1 local street)
   roads,
+  // Waterfront detail: [class, ...line] (0 footway, 1 cycleway); [kind, ...ring] (0 lawn/park, 1 sports field,
+  // 2 playground); trees as one delta-encoded point list, nearest first.
+  paths,
+  greens,
+  trees,
 };
 
 await mkdir(dirname(OUT), { recursive: true });
@@ -542,6 +585,6 @@ console.log('Tallest:', kept.sort((a, b) => b.h - a.h).slice(0, 8).map((o) => `$
 console.log('Landmarks:', Object.keys(landmarkOut).join(', '));
 const part = (k) => `${k} ${(gzipSync(JSON.stringify(data[k])).length / 1024).toFixed(0)} KB`;
 console.log('Extras:', `mask ${mask.width}×${mask.height},`, `terrain ${terrain.cols}×${terrain.rows} (max ${terrain.max} m, ${terrain.tiles} tiles),`, `bridge ${bridge ? 'yes' : 'no'},`, `${docks.length} docks, ${boats.length} boats`);
-console.log('Gzipped parts:', ['buildings', 'waterMask', 'terrain', 'shoreline', 'docks', 'boats', 'signatures', 'roads'].map(part).join(', '));
-console.log('Signatures:', signatures.map((s) => s.id).join(', '), '| roads:', roads.length);
+console.log('Gzipped parts:', ['buildings', 'waterMask', 'terrain', 'shoreline', 'docks', 'boats', 'signatures', 'roads', 'paths', 'greens', 'trees'].map(part).join(', '));
+console.log('Signatures:', signatures.map((s) => s.id).join(', '), '| roads:', roads.length, '| paths:', paths.length, '| greens:', greens.length, '| trees:', treePts.length);
 console.log(`Wrote ${OUT}: ${(json.length / 1024).toFixed(0)} KB, ${(gzipSync(json).length / 1024).toFixed(0)} KB gzipped`);

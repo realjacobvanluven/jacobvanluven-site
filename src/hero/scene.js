@@ -4,6 +4,7 @@ import { skyGlsl, sunDirection } from './shaders.js';
 import { createBuildings, createFacadeMaterial } from './buildings.js';
 import { createSignatures } from './signatures.js';
 import { createStreets } from './streets.js';
+import { createWaterfront } from './waterfront.js';
 import { createWater, createGround } from './water.js';
 import { createMountains, northShoreLightPoints, demHeightAt, terrainHeight } from './mountains.js';
 import { createLightPoints, aviationLights, distantLights } from './lights.js';
@@ -45,8 +46,8 @@ export const framingFor = (aspect) => (aspect < 1 ? FRAMING.phone : FRAMING.desk
 export const TURN_BEARING = { desktop: 38, phone: 56 };
 
 const SCENE_DETAIL = {
-  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48] },
-  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70] },
+  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600 },
+  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000 },
 };
 
 function insideRing([x, y], r) {
@@ -230,9 +231,15 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.add(createGround(uniforms));
 
   await breathe();
-  const seawall = createSeawall(data.shoreline, uniforms, { camera: CAMERA_POSITION, isWater });
+  // Mapped trees replace the seawall's generated ones when the data has them.
+  const seawall = createSeawall(data.shoreline, uniforms, { camera: CAMERA_POSITION, isWater, treeDistance: data.trees.length ? 0 : 1600 });
   scene.add(seawall.group);
   addLights(seawall.lamps, 0);
+
+  // Waterfront and parks: lawns, footpaths and bike paths with path lights, mapped trees.
+  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance });
+  scene.add(waterfront.group);
+  addLights(waterfront.lamps, 2);
 
   let bridgeStats = null;
   const animators = []; // (time) => void, run before every frame
@@ -379,7 +386,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, streets: streets.stats, signatures: data.signatures.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, streets: streets.stats, waterfront: waterfront.stats, signatures: data.signatures.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {

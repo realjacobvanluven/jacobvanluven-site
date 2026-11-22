@@ -64,12 +64,26 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
         return 0.0;
       }
 
-      vec2 ripple(vec2 p, float t) {
+      // Surface slope (dh/dx, dh/dz) from a few travelling wave trains, ~30 m down to ~2.5 m long.
+      // Each train fades out once it gets smaller than a couple of pixels, so distant water stays calm
+      // instead of shimmering.
+      vec2 waveSlope(vec2 p, float t, float pixelMetres) {
         vec2 g = vec2(0.0);
-        g += vec2(0.6, 0.8) * cos(dot(p, vec2(0.6, 0.8)) * 0.9 + t * 1.3);
-        g += vec2(-0.7, 0.5) * cos(dot(p, vec2(-0.7, 0.5)) * 1.7 + t * 1.9) * 0.6;
-        g += vec2(0.2, -1.0) * cos(dot(p, vec2(0.2, -1.0)) * 3.1 + t * 2.3) * 0.35;
-        g += (vec2(hash12(floor(p * 0.6)), hash12(floor(p * 0.6) + 17.0)) - 0.5) * 0.6;
+        // direction, wavelength (m), speed (m/s), steepness
+        vec4 w[6];
+        w[0] = vec4(normalize(vec2(0.8, 0.6)), 31.0, 1.6);
+        w[1] = vec4(normalize(vec2(-0.5, 0.9)), 17.0, 1.2);
+        w[2] = vec4(normalize(vec2(0.95, -0.3)), 9.5, 0.9);
+        w[3] = vec4(normalize(vec2(-0.85, -0.5)), 5.3, 0.7);
+        w[4] = vec4(normalize(vec2(0.3, 1.0)), 3.4, 0.55);
+        w[5] = vec4(normalize(vec2(-0.2, -1.0)), 2.4, 0.45);
+        float steep[6];
+        steep[0] = 0.025; steep[1] = 0.035; steep[2] = 0.05; steep[3] = 0.06; steep[4] = 0.06; steep[5] = 0.055;
+        for (int i = 0; i < 6; i++) {
+          float k = 6.2831853 / w[i].z;
+          float fade = 1.0 - smoothstep(0.25, 0.6, pixelMetres / w[i].z);
+          g += w[i].xy * cos(dot(p, w[i].xy) * k - t * w[i].w * k + float(i) * 1.7) * steep[i] * fade;
+        }
         return g;
       }
 
@@ -80,13 +94,16 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
         vec3 toCam = cameraPosition - vWorld;
         float dist = length(toCam);
         vec3 V = toCam / dist;
-        vec2 rg = ripple(local * 1.6, uTime) * (1.0 / (1.0 + dist * 0.006));
-        vec3 N = normalize(vec3(rg.x * 0.05, 1.0, rg.y * 0.05));
+        float pixelMetres = length(fwidth(local));               // size of one pixel on the water here
+        vec2 slope = waveSlope(local, uTime, pixelMetres);
+        vec3 N = normalize(vec3(-slope.x, 1.0, slope.y));          // world z = -local y
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
 
+        // Ripples wobble the reflection: strongest close to the camera, gentler far away.
         vec4 uv = vUv;
-        uv.x += rg.x * 0.0025 * uv.w;
-        uv.y += rg.y * 0.004 * uv.w;
+        float wobble = clamp(260.0 / dist, 0.2, 1.0);
+        uv.x += slope.x * 0.045 * wobble * uv.w;
+        uv.y += slope.y * 0.08 * wobble * uv.w;
         vec3 refl = vec3(0.0);
         float wsum = 0.0;
         for (int k = -3; k <= 4; k++) {
