@@ -1,0 +1,371 @@
+---
+/**
+ * Plain-language checker: paste text, see wordy phrases, passive voice, long sentences, filler and
+ * unexplained acronyms, plus a readability score. Rule-based and fully client-side (src/lib/plain-language.ts):
+ * nothing is sent anywhere.
+ */
+const sample = `The annual update was completed by the team in order to leverage our BCP process going forward. We utilize a robust methodology that facilitates the ability of stakeholders to commence a number of actionable workstreams prior to the launch of the new platform, which is really expected to deliver value across a wide range of departments.
+
+The team finished the update on time. Next year, I will start earlier.`;
+---
+
+<div class="plc" data-plc>
+  <div class="input">
+    <label for="plc-text">Paste your text</label>
+    <textarea id="plc-text" rows="10" spellcheck="true" placeholder="Paste an email, a memo, a paragraph from a report…"></textarea>
+    <div class="actions">
+      <button type="button" data-sample>Try an example</button>
+      <button type="button" data-clear>Clear</button>
+    </div>
+    <p class="privacy">Runs in your browser. Your text is never uploaded or stored.</p>
+  </div>
+
+  <div class="results" aria-live="polite">
+    <dl class="stats">
+      <div><dt>Words</dt><dd data-words>0</dd></div>
+      <div><dt>Avg. sentence</dt><dd data-avg>–</dd></div>
+      <div><dt>Grade level</dt><dd data-grade>–</dd></div>
+      <div><dt>Reading ease</dt><dd data-ease>–</dd></div>
+    </dl>
+    <p class="verdict" data-verdict>Paste some text to start.</p>
+
+    <h2 class="h">Your text, marked up</h2>
+    <ul class="legend">
+      <li><mark class="m-jargon">wordy</mark> plainer word exists</li>
+      <li><mark class="m-passive">passive</mark> who did it?</li>
+      <li><mark class="m-acronym">acronym</mark> spell out first</li>
+      <li><mark class="m-weak">filler</mark> cut it</li>
+      <li><span class="m-long-key">long</span> over 25 words</li>
+    </ul>
+    <div class="marked" data-marked></div>
+
+    <h2 class="h">What to fix</h2>
+    <ol class="findings" data-findings></ol>
+  </div>
+</div>
+
+<style>
+  .plc {
+    display: grid;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+
+  @media (min-width: 62rem) {
+    .plc {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      align-items: start;
+    }
+
+    .input {
+      position: sticky;
+      top: 1rem;
+    }
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font: 500 0.8125rem var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-soft);
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 14rem;
+    padding: 0.9rem 1rem;
+    resize: vertical;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: 1rem/1.55 var(--font-body);
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+
+  button {
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font: 500 0.8125rem var(--font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .privacy {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 0;
+  }
+
+  .stats div {
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  dt {
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0.2rem 0 0;
+    font: 600 1.5rem var(--font-display);
+  }
+
+  @media (max-width: 30rem) {
+    .stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .verdict {
+    margin: 0.75rem 0 0;
+    color: var(--text-muted);
+  }
+
+  .h {
+    margin: 2rem 0 0.75rem;
+    font-size: 1.125rem;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+    margin: 0 0 0.9rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+
+  .marked {
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.75;
+    min-height: 4rem;
+  }
+
+  .marked :global(.long),
+  .m-long-key {
+    border-bottom: 2px solid var(--accent);
+  }
+
+  mark,
+  .marked :global(mark) {
+    color: inherit;
+    border-radius: 3px;
+    padding: 0.05em 0.15em;
+  }
+
+  .m-jargon,
+  .marked :global(.m-jargon) {
+    background: rgb(255 122 26 / 0.28);
+  }
+
+  .m-passive,
+  .marked :global(.m-passive) {
+    background: rgb(110 170 255 / 0.25);
+    text-decoration: underline wavy rgb(110 170 255);
+    text-underline-offset: 0.2em;
+  }
+
+  .m-acronym,
+  .marked :global(.m-acronym) {
+    background: rgb(90 210 190 / 0.22);
+    border-bottom: 2px dotted rgb(90 210 190);
+  }
+
+  .m-weak,
+  .marked :global(.m-weak) {
+    background: rgb(255 255 255 / 0.1);
+    text-decoration: line-through;
+    text-decoration-color: var(--text-muted);
+  }
+
+  .findings {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .findings :global(li) {
+    padding: 0.75rem 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    font-size: 0.9375rem;
+  }
+
+  .findings :global(.kind) {
+    display: block;
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-soft);
+  }
+
+  .findings :global(.quote) {
+    font-weight: 600;
+  }
+
+  .findings :global(.why) {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-muted);
+  }
+
+  .findings :global(.none) {
+    border-left-color: var(--border);
+    color: var(--text-muted);
+  }
+</style>
+
+<script define:vars={{ sample }}>
+  window.__plcSample = sample;
+</script>
+
+<script>
+  import { analyze, readingLabel, type Issue, type IssueKind } from '../../lib/plain-language';
+
+  const root = document.querySelector<HTMLElement>('[data-plc]')!;
+  const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+  const input = $<HTMLTextAreaElement>('textarea');
+  const marked = $('[data-marked]');
+  const findings = $('[data-findings]');
+
+  const LABEL: Record<IssueKind, string> = {
+    jargon: 'Wordy',
+    passive: 'Passive voice',
+    weak: 'Filler',
+    acronym: 'Acronym',
+    long: 'Long sentence',
+  };
+  const PRIORITY: Record<IssueKind, number> = { jargon: 0, passive: 1, acronym: 2, weak: 3, long: 9 };
+
+  function el(tag: string, cls?: string, text?: string) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  /** Marks that don't overlap: higher-priority kinds win. */
+  function pickMarks(issues: Issue[]): Issue[] {
+    const sorted = issues.filter((i) => i.kind !== 'long').sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || a.start - b.start);
+    const taken: Issue[] = [];
+    for (const i of sorted) if (!taken.some((t) => i.start < t.end && t.start < i.end)) taken.push(i);
+    return taken.sort((a, b) => a.start - b.start);
+  }
+
+  function render() {
+    const text = input.value;
+    const r = analyze(text);
+    $('[data-words]').textContent = String(r.words);
+    $('[data-avg]').textContent = r.words ? String(r.avgSentenceLength) : '–';
+    $('[data-grade]').textContent = r.words ? String(r.grade) : '–';
+    $('[data-ease]').textContent = r.words ? String(r.readingEase) : '–';
+    $('[data-verdict]').textContent = r.words
+      ? `${readingLabel(r.readingEase)}. ${r.issues.length} thing${r.issues.length === 1 ? '' : 's'} to look at.`
+      : 'Paste some text to start.';
+
+    // Marked-up text: sentences (long ones underlined) containing non-overlapping marks.
+    marked.replaceChildren();
+    const marks = pickMarks(r.issues);
+    let pos = 0;
+    let mi = 0;
+    const emitRange = (parent: HTMLElement, from: number, to: number) => {
+      let p = from;
+      while (mi < marks.length && marks[mi].start < to) {
+        const m = marks[mi];
+        if (m.start < p) { mi++; continue; }
+        parent.append(text.slice(p, m.start));
+        const node = el('mark', `m-${m.kind}`, text.slice(m.start, m.end));
+        node.title = m.suggestion ? `${m.message} Try: ${m.suggestion}` : m.message;
+        parent.append(node);
+        p = m.end;
+        mi++;
+      }
+      parent.append(text.slice(p, to));
+    };
+    for (const s of r.sentences) {
+      if (s.start > pos) marked.append(text.slice(pos, s.start));
+      const span = el('span', s.long ? 'long' : undefined);
+      emitRange(span, s.start, s.end);
+      marked.append(span);
+      pos = s.end;
+    }
+    if (pos < text.length) marked.append(text.slice(pos));
+    if (!text.trim()) marked.textContent = 'Your marked-up text will appear here.';
+
+    // Findings list.
+    findings.replaceChildren();
+    if (!r.words) return;
+    if (r.issues.length === 0) {
+      findings.append(el('li', 'none', 'Nothing flagged. Read it aloud once more to be sure.'));
+      return;
+    }
+    const order = [...r.issues].sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || a.start - b.start);
+    for (const i of order) {
+      const li = el('li');
+      li.append(el('span', 'kind', LABEL[i.kind]));
+      const q = i.kind === 'long' ? i.text.split(/\s+/).slice(0, 12).join(' ') + ' …' : i.text;
+      const line = el('span');
+      line.append(el('span', 'quote', `“${q}”`));
+      if (i.suggestion) line.append(` → ${i.suggestion}`);
+      li.append(line, el('span', 'why', i.message));
+      findings.append(li);
+    }
+  }
+
+  let timer = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(render, 150);
+  });
+  $('[data-sample]').addEventListener('click', () => {
+    input.value = (window as unknown as { __plcSample: string }).__plcSample;
+    render();
+  });
+  $('[data-clear]').addEventListener('click', () => {
+    input.value = '';
+    render();
+    input.focus();
+  });
+  render();
+</script>
