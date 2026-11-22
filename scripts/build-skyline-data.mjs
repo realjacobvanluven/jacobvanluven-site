@@ -446,7 +446,8 @@ const roads = [];
 for (const e of roadsData.elements) {
   if (e.type !== 'way' || !e.geometry || e.tags?.bridge === 'yes' || e.tags?.tunnel === 'yes') continue;
   const line = simplify(e.geometry.map((p) => toLocal([p.lon, p.lat])), 2);
-  const inside = line.filter((p) => inView(p) && Math.hypot(...p) < 2900);
+  // The view wedge, plus everything close to the camera (the camera turns east toward Science World).
+  const inside = line.filter((p) => (inView(p) && Math.hypot(...p) < 2900) || (Math.hypot(...p) < 1100 && p[1] > -60));
   if (inside.length < 2) continue;
   roads.push([ROAD_CLASS[e.tags.highway] ?? 1, ...encodeRing(inside)]);
 }

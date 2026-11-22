@@ -247,6 +247,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   // Street life: lamps along the downtown streets, traffic on the main roads.
   const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing });
   scene.add(streets.surface);
+  if (streets.bodies) scene.add(streets.bodies);
   addLights(streets.lamps, 2);
   if (streets.carLights.length) {
     const streetTraffic = createLightPoints(streets.carLights, uniforms);
