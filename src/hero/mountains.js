@@ -64,13 +64,37 @@ export function terrainHeight(x, y) {
   return Math.max(h * Math.min(1, inland / 900), 2);
 }
 
-export function createMountains(uniforms, { segmentsX = 180, segmentsY = 110 } = {}) {
-  const x0 = -16000, x1 = 16000, y0 = 3400, y1 = 26000;
-  const g = new THREE.PlaneGeometry(x1 - x0, y1 - y0, segmentsX, segmentsY);
-  g.rotateX(-Math.PI / 2);
-  g.translate((x0 + x1) / 2, 0, -(y0 + y1) / 2);
-  const pos = g.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, terrainHeight(pos.getX(i), -pos.getZ(i)));
+/** Bilinear height lookup on the real elevation grid (local metres). */
+export function demHeightAt(dem, x, y) {
+  const fx = (x - dem.x0) / dem.step, fy = (y - dem.y0) / dem.step;
+  const ix = Math.max(0, Math.min(dem.cols - 2, Math.floor(fx))), iy = Math.max(0, Math.min(dem.rows - 2, Math.floor(fy)));
+  const ax = Math.min(1, Math.max(0, fx - ix)), ay = Math.min(1, Math.max(0, fy - iy));
+  const h = (c, r) => dem.heights[r * dem.cols + c];
+  return (h(ix, iy) * (1 - ax) + h(ix + 1, iy) * ax) * (1 - ay) + (h(ix, iy + 1) * (1 - ax) + h(ix + 1, iy + 1) * ax) * ay;
+}
+
+/**
+ * North Shore mountains. With `dem` (real elevation grid from the data file) the mesh follows the actual
+ * terrain; without it, the procedural range above is used. `stride` skips grid points on low tiers.
+ */
+export function createMountains(uniforms, { dem = null, stride = 1, segmentsX = 180, segmentsY = 110 } = {}) {
+  let g;
+  if (dem) {
+    const cols = Math.floor((dem.cols - 1) / stride) + 1, rows = Math.floor((dem.rows - 1) / stride) + 1;
+    const span = [(cols - 1) * stride * dem.step, (rows - 1) * stride * dem.step];
+    g = new THREE.PlaneGeometry(span[0], span[1], cols - 1, rows - 1);
+    g.rotateX(-Math.PI / 2);
+    g.translate(dem.x0 + span[0] / 2, 0, -(dem.y0 + span[1] / 2));
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, demHeightAt(dem, pos.getX(i), -pos.getZ(i)));
+  } else {
+    const x0 = -16000, x1 = 16000, y0 = 3400, y1 = 26000;
+    g = new THREE.PlaneGeometry(x1 - x0, y1 - y0, segmentsX, segmentsY);
+    g.rotateX(-Math.PI / 2);
+    g.translate((x0 + x1) / 2, 0, -(y0 + y1) / 2);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, terrainHeight(pos.getX(i), -pos.getZ(i)));
+  }
   g.computeVertexNormals();
 
   const material = new THREE.ShaderMaterial({
@@ -93,22 +117,22 @@ export function createMountains(uniforms, { segmentsX = 180, segmentsY = 110 } =
       void main() {
         vec3 n = normalize(vNormal);
         vec3 sunFlat = normalize(vec3(uSunDir.x, 0.0, uSunDir.z));
-        // Snow above ~1050 m, patchy, mostly on gentler slopes.
-        float snowPatch = hash12(floor(vWorld.xz / 60.0)) * 140.0;
-        float snow = smoothstep(1000.0, 1150.0, vWorld.y + snowPatch) * smoothstep(0.45, 0.8, n.y);
-        vec3 forest = vec3(0.004, 0.007, 0.010);
-        vec3 snowCol = vec3(0.05, 0.06, 0.095);
+        // Snow above ~1100 m, patchy, mostly on gentler slopes.
+        float snowPatch = hash12(floor(vWorld.xz / 50.0)) * 160.0;
+        float snow = smoothstep(1050.0, 1200.0, vWorld.y + snowPatch) * smoothstep(0.5, 0.85, n.y);
+        vec3 forest = vec3(0.0025, 0.0045, 0.0065);
+        vec3 snowCol = vec3(0.07, 0.06, 0.08);           // faintly pink in the afterglow
         vec3 base = mix(forest, snowCol, snow);
-        float sky = 0.6 + 0.4 * n.y;
+        float sky = 0.55 + 0.45 * n.y;
         float west = max(dot(n, sunFlat), 0.0);
-        vec3 col = base * sky + base * vec3(1.0, 0.45, 0.2) * west * 0.6;
-        // Haze: strong with distance, stronger low down (moisture in the valleys).
+        vec3 col = base * sky * vec3(0.8, 0.85, 1.0) + base * vec3(1.0, 0.5, 0.45) * west * (0.5 + snow * 1.2);
+        // Light haze with distance, a little more low down; toward a darkened horizon colour so the
+        // range stays a dark silhouette under the brighter sky.
         vec3 v = vWorld - cameraPosition;
         float dist = length(v);
         float haze = 1.0 - exp(-dist * uMountainHaze);
-        haze = clamp(haze + (1.0 - smoothstep(0.0, 900.0, vWorld.y)) * 0.15, 0.0, 0.97);
-        // Haze toward a darkened horizon colour, so the range stays a silhouette below the brighter sky.
-        gl_FragColor = vec4(mix(col, hazeColor(v / dist) * 0.62, haze), 1.0);
+        haze = clamp(haze + (1.0 - smoothstep(0.0, 600.0, vWorld.y)) * 0.08, 0.0, 0.9);
+        gl_FragColor = vec4(mix(col, hazeColor(v / dist) * 0.45, haze), 1.0);
       }
     `,
   });
@@ -116,18 +140,18 @@ export function createMountains(uniforms, { segmentsX = 180, segmentsY = 110 } =
 }
 
 /** Scattered house and street lights on the lower North Shore slopes (North and West Vancouver). */
-export function northShoreLightPoints(count = 2600, seed = 7) {
+export function northShoreLightPoints(count = 2600, heightAt = terrainHeight, seed = 7) {
   let s = seed;
   const rand = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
   const pts = [];
   let guard = 0;
-  while (pts.length < count && guard++ < count * 20) {
-    const x = -7000 + rand() * 14000;
-    const y = northShore(x) + 40 + rand() * 4200;
-    const h = terrainHeight(x, y);
-    // Dense near the shore, thinning out up the slopes; none above ~450 m.
-    if (h > 450 || rand() > 1 - h / 480) continue;
-    pts.push([x, h + 3, y]);
+  while (pts.length < count && guard++ < count * 30) {
+    const x = -8000 + rand() * 16000;
+    const y = 3300 + rand() * 7000;
+    const h = heightAt(x, y);
+    // On land, dense near the shore, thinning up the slopes; none above ~450 m.
+    if (h < 3 || h > 450 || rand() > 1 - h / 480) continue;
+    pts.push([x, h + 3, -y]);
   }
   return pts;
 }

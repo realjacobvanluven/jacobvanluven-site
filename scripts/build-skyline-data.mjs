@@ -9,7 +9,10 @@
  *    ground (HGT_AGL). Used for heights and podium/tower massing wherever the 2015 building still matches.
  *  - OpenStreetMap (Overpass API): heights for buildings the City data doesn't cover, towers built
  *    after 2015, False Creek shoreline, and landmark positions.
+ *  - Terrain: AWS Terrarium tiles, built from NRCan CDEM in Canada (Open Government Licence – Canada).
  *  City data: Open Government Licence – Vancouver. OSM: © OpenStreetMap contributors, ODbL.
+ *  Also precomputed here (so the browser doesn't have to): the land/water mask, North Shore terrain grid,
+ *  the Cambie Bridge line, marina docks and moored-boat positions.
  *
  * How a building is chosen (per 2015 footprint)
  *  1. If 2009 parts cover most of it, the building existed in 2009: use those stepped parts.
@@ -23,6 +26,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
+import { sampleTerrain } from './lib/terrain.mjs';
+import { buildWaterMask } from './lib/water-mask.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = join(ROOT, 'scripts/.cache');
@@ -58,6 +64,12 @@ const LANDMARKS = [
 const M_PER_DEG_LAT = 111_320;
 const M_PER_DEG_LON = M_PER_DEG_LAT * Math.cos((CAMERA.lat * Math.PI) / 180);
 const toLocal = ([lon, lat]) => [(lon - CAMERA.lon) * M_PER_DEG_LON, (lat - CAMERA.lat) * M_PER_DEG_LAT];
+const toLonLat = (x, y) => [CAMERA.lon + x / M_PER_DEG_LON, CAMERA.lat + y / M_PER_DEG_LAT];
+
+// Extras: water mask covers the OSM shoreline data; terrain covers the North Shore.
+const MASK = { x0: -3600, x1: 3600, y0: -800, y1: 2860, metresPerPixel: 2 };
+const TERRAIN = { x0: -16000, x1: 16000, y0: 2900, y1: 26000, step: 150 };
+const EXTRAS_BBOX = '49.262,-123.145,49.285,-123.095';
 
 function area(ring) {
   let a = 0;
@@ -149,6 +161,16 @@ async function cached(name, fetcher) {
   return data;
 }
 
+async function cachedBinary(name, fetcher) {
+  const file = join(CACHE, name);
+  if (existsSync(file)) return readFile(file);
+  console.log(`Downloading ${name} ...`);
+  const data = await fetcher();
+  await mkdir(CACHE, { recursive: true });
+  await writeFile(file, data);
+  return data;
+}
+
 async function getJson(url, init = {}) {
   const res = await fetch(url, { ...init, headers: { 'User-Agent': USER_AGENT, ...init.headers } });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
@@ -161,20 +183,10 @@ function cityFootprints(year) {
   return cached(`city-footprints-${year}.geojson`, () => getJson(url));
 }
 
-function osm() {
-  const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
-  const names = LANDMARKS.map((l) => l.osm).join('|');
-  const query = `[out:json][timeout:120];
-(
-  way["building"](${b}); relation["building"](${b});
-  way["building:part"](${b}); relation["building:part"](${b});
-  way["natural"="coastline"](${b});
-  nwr["name"~"^(${names})$"](${b});
-);
-out tags geom;`;
-  // Public Overpass servers are often busy: try each mirror, twice.
+/** Runs an Overpass query (cached). Public servers are often busy: try each mirror, twice. */
+function overpass(name, query) {
   const mirrors = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
-  return cached('osm.json', async () => {
+  return cached(name, async () => {
     let lastError;
     for (let attempt = 0; attempt < 2; attempt++) {
       for (const url of mirrors) {
@@ -187,12 +199,36 @@ out tags geom;`;
         } catch (e) {
           lastError = e;
           console.warn(`  Overpass failed (${e.message}); trying next mirror`);
-          await new Promise((r) => setTimeout(r, 3000));
+          await new Promise((r) => setTimeout(r, 5000));
         }
       }
     }
     throw lastError;
   });
+}
+
+function osm() {
+  const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
+  const names = LANDMARKS.map((l) => l.osm).join('|');
+  return overpass('osm.json', `[out:json][timeout:120];
+(
+  way["building"](${b}); relation["building"](${b});
+  way["building:part"](${b}); relation["building:part"](${b});
+  way["natural"="coastline"](${b});
+  nwr["name"~"^(${names})$"](${b});
+);
+out tags geom;`);
+}
+
+/** Cambie Bridge roadway, marinas and their docks. */
+function osmExtras() {
+  return overpass('osm-extras.json', `[out:json][timeout:60];
+(
+  way["name"~"^Cambie (Street )?Bridge"]["highway"](${EXTRAS_BBOX});
+  way["leisure"="marina"](${EXTRAS_BBOX});
+  way["man_made"="pier"](${EXTRAS_BBOX});
+);
+out tags geom;`);
 }
 
 // ---- Parsing ----------------------------------------------------------------------------------------
@@ -239,6 +275,7 @@ function osmRings(el) {
 
 // ---- Build ------------------------------------------------------------------------------------------
 const [fc2015, fc2009, osmData] = await Promise.all([cityFootprints(2015), cityFootprints(2009), osm()]);
+const extras = await osmExtras();
 
 const f15 = cityRings(fc2015, false);
 const p09 = cityRings(fc2009, true).filter((p) => p.h);
@@ -351,10 +388,71 @@ for (const l of LANDMARKS) {
   landmarkOut[l.id] = { name: l.name, center: [dm((x0 + x1) / 2), dm((y0 + y1) / 2)], bounds: [dm(x0), dm(y0), dm(x1), dm(y1)] };
 }
 
-const shore = coastline
-  .map((line) => line.filter(([x, y]) => Math.abs(x) < 3500 && y > -500 && y < 3500))
+const shoreLines = coastline
+  .map((line) => line.filter(([x, y]) => Math.abs(x) < 3700 && y > -900 && y < 3500))
   .filter((line) => line.length > 1)
-  .map((line) => encodeRing(simplify(line, 2)));
+  .map((line) => simplify(line, 1));
+const shore = shoreLines.map(encodeRing);
+
+// ---- Extras -----------------------------------------------------------------------------------------
+const mask = buildWaterMask(shoreLines, MASK);
+
+const terrain = await sampleTerrain(TERRAIN, toLonLat, cachedBinary, USER_AGENT);
+// Sea level and below → -4 m so the water plane covers it.
+const terrainRows = [];
+for (let r = 0; r < terrain.rows; r++) {
+  const row = [];
+  let prev = 0;
+  for (let c = 0; c < terrain.cols; c++) {
+    const h = Math.max(-4, terrain.heights[r * terrain.cols + c] <= 0 ? -4 : terrain.heights[r * terrain.cols + c]);
+    row.push(h - prev);
+    prev = h;
+  }
+  terrainRows.push(row);
+}
+
+// Cambie Bridge: principal axis of all its roadway points → one straight line (it is nearly straight).
+const bridgePts = extras.elements
+  .filter((e) => e.type === 'way' && /^Cambie (Street )?Bridge/.test(e.tags?.name ?? '') && e.geometry)
+  .flatMap((e) => e.geometry.map((p) => toLocal([p.lon, p.lat])));
+let bridge = null;
+if (bridgePts.length > 1) {
+  const cx = bridgePts.reduce((s, p) => s + p[0], 0) / bridgePts.length, cy = bridgePts.reduce((s, p) => s + p[1], 0) / bridgePts.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const [x, y] of bridgePts) { sxx += (x - cx) ** 2; syy += (y - cy) ** 2; sxy += (x - cx) * (y - cy); }
+  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+  const proj = bridgePts.map(([x, y]) => (x - cx) * ux + (y - cy) * uy);
+  const t0 = Math.min(...proj), t1 = Math.max(...proj);
+  bridge = [[cx + ux * t0, cy + uy * t0], [cx + ux * t1, cy + uy * t1]];
+}
+
+// Docks and moored boats: boats side by side, perpendicular to each dock, wherever the water mask says water.
+let seed = 4242;
+const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+const docks = extras.elements
+  .filter((e) => e.type === 'way' && e.tags?.man_made === 'pier' && e.geometry)
+  .map((e) => e.geometry.map((p) => toLocal([p.lon, p.lat])))
+  .filter((line) => line.some(([x, y]) => Math.hypot(x, y) < 3000));
+const boats = [];
+for (const line of docks) {
+  for (let i = 1; i < line.length; i++) {
+    const [ax, ay] = line[i - 1], [bx, by] = line[i];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 6) continue;
+    const ux = (bx - ax) / len, uy = (by - ay) / len;
+    for (let s = 3; s < len - 2; s += 5.5 + rand() * 2.5) {
+      for (const side of [-1, 1]) {
+        if (rand() > 0.72) continue;
+        const L = 8 + rand() * 9;
+        const nx = -uy * side, ny = ux * side;
+        const cx = ax + ux * s + nx * (L / 2 + 1.6), cy = ay + uy * s + ny * (L / 2 + 1.6);
+        const ok = [0, 0.5, -0.5].every((k) => mask.isWater(cx + nx * L * k, cy + ny * L * k));
+        if (!ok) continue;
+        boats.push([dm(cx), dm(cy), Math.round((Math.atan2(ny, nx) * 1800) / Math.PI), dm(L), rand() < 0.45 ? 1 : 0]);
+      }
+    }
+  }
+}
 
 const data = {
   version: 1,
@@ -371,17 +469,25 @@ const data = {
   buildings: kept.map((o) => [dm(o.h), dm(o.base), SRC.indexOf(o.src), ...encodeRing(o.ring)]),
   landmarks: landmarkOut,
   shoreline: shore,
+  waterMask: { ...MASK, width: mask.width, height: mask.height, rows: mask.rows },
+  terrain: { ...TERRAIN, cols: terrain.cols, rows: terrain.rows, source: 'AWS Terrarium tiles (NRCan CDEM)', heights: terrainRows },
+  bridge: bridge && bridge.map((p) => p.map(dm)),
+  docks: docks.map(encodeRing),
+  // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
+  boats,
 };
 
 await mkdir(dirname(OUT), { recursive: true });
 const json = JSON.stringify(data);
 await writeFile(OUT, json);
 
-const { gzipSync } = await import('node:zlib');
 const bySrc = Object.fromEntries(SRC.map((s) => [s, kept.filter((o) => o.src === s).length]));
 console.log('2015 footprints:', f15.length, '| 2009 parts with height:', p09.length, '| OSM buildings:', osmBuildings.length, 'parts:', osmParts.length);
 console.log('Decisions:', stats);
 console.log('Kept in view:', kept.length, 'prisms', bySrc);
 console.log('Tallest:', kept.sort((a, b) => b.h - a.h).slice(0, 8).map((o) => `${o.h.toFixed(0)}m(${o.src})`).join(', '));
 console.log('Landmarks:', Object.keys(landmarkOut).join(', '));
+const part = (k) => `${k} ${(gzipSync(JSON.stringify(data[k])).length / 1024).toFixed(0)} KB`;
+console.log('Extras:', `mask ${mask.width}×${mask.height},`, `terrain ${terrain.cols}×${terrain.rows} (max ${terrain.max} m, ${terrain.tiles} tiles),`, `bridge ${bridge ? 'yes' : 'no'},`, `${docks.length} docks, ${boats.length} boats`);
+console.log('Gzipped parts:', ['buildings', 'waterMask', 'terrain', 'shoreline', 'docks', 'boats'].map(part).join(', '));
 console.log(`Wrote ${OUT}: ${(json.length / 1024).toFixed(0)} KB, ${(gzipSync(json).length / 1024).toFixed(0)} KB gzipped`);

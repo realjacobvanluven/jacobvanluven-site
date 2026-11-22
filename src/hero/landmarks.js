@@ -36,8 +36,8 @@ export function bcPlace({ center, angle, a, b }, envMap) {
   const roof = new THREE.Mesh(
     new THREE.SphereGeometry(1, 96, 20, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshStandardMaterial({
-      color: 0xd8dde4, roughness: 0.9, metalness: 0.0, envMap, envMapIntensity: 0.55,
-      emissive: new THREE.Color(0.07, 0.075, 0.085), // faint glow of the lit stadium through the fabric
+      color: 0xf4f5f7, roughness: 0.95, metalness: 0.0, envMap, envMapIntensity: 0.25,
+      emissive: new THREE.Color(0.16, 0.155, 0.15), // white fabric, glowing softly from the lit stadium inside
     }),
   );
   roof.scale.set(rx * 0.96, roofRise, rz * 0.96);
@@ -47,8 +47,8 @@ export function bcPlace({ center, angle, a, b }, envMap) {
   // Masts around the rim, leaning slightly outward.
   const masts = 36, mastH = 46;
   const mastMesh = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(1.6, mastH, 1.6),
-    new THREE.MeshStandardMaterial({ color: 0x8a9099, roughness: 0.5, metalness: 0.4, envMap }),
+    new THREE.CylinderGeometry(0.45, 0.7, mastH, 6),
+    new THREE.MeshStandardMaterial({ color: 0xe6e9ee, roughness: 0.5, metalness: 0.1, envMap, emissive: new THREE.Color(0.05, 0.05, 0.055) }),
     masts,
   );
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);

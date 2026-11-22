@@ -75,5 +75,45 @@ export async function loadSkyline(url) {
     landmarks.scienceWorld = { center: e.center, radius: (e.a + e.b) / 2, top: scienceDome.h };
   }
 
-  return { buildings, landmarks, shoreline: raw.shoreline.map((l) => decodeRing(l)), raw };
+  return {
+    buildings, landmarks,
+    shoreline: raw.shoreline.map((l) => decodeRing(l)),
+    waterMask: decodeWaterMask(raw.waterMask),
+    terrain: decodeTerrain(raw.terrain),
+    bridge: raw.bridge?.map((p) => p.map((v) => v / 10)) ?? null,
+    docks: (raw.docks ?? []).map((l) => decodeRing(l)),
+    boats: (raw.boats ?? []).map(([x, y, a, len, kind]) => ({ x: x / 10, y: y / 10, heading: (a / 1800) * Math.PI, length: len / 10, sail: kind === 1 })),
+    raw,
+  };
+}
+
+/** Run-length rows (land, water, land…; top row = north) → bottom-up Uint8 texture data + lookup. */
+function decodeWaterMask(m) {
+  const { width: W, height: H } = m;
+  const data = new Uint8Array(W * H);
+  m.rows.forEach((runs, rowFromTop) => {
+    const row = H - 1 - rowFromTop;
+    let x = 0, water = false;
+    for (const run of runs) {
+      if (water) data.fill(255, row * W + x, row * W + x + run);
+      x += run;
+      water = !water;
+    }
+  });
+  const isWater = (x, y) => {
+    const px = Math.floor((x - m.x0) / m.metresPerPixel), py = Math.floor((y - m.y0) / m.metresPerPixel);
+    return px >= 0 && py >= 0 && px < W && py < H && data[py * W + px] === 255;
+  };
+  return { ...m, data, isWater };
+}
+
+/** Delta-encoded rows (south → north) → Float32 heights, row-major. */
+function decodeTerrain(t) {
+  if (!t) return null;
+  const heights = new Float32Array(t.cols * t.rows);
+  t.heights.forEach((row, r) => {
+    let h = 0;
+    row.forEach((d, c) => { h += d; heights[r * t.cols + c] = h; });
+  });
+  return { x0: t.x0, y0: t.y0, step: t.step, cols: t.cols, rows: t.rows, heights };
 }

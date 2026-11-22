@@ -1,16 +1,17 @@
 <!doctype html>
 <!--
-  Skyline look development (step 3): the realistic blue-hour scene from src/hero/, as a still.
+  Skyline look development: the realistic blue-hour scene from src/hero/, as a still.
   Not part of the site. Serve the repo root locally and open
-  /scripts/skyline-lookdev.html?preset=desktop  (or preset=phone; add &bench=1 for per-effect timings).
-  Sets window.__result = { png, stats, timings, bench } for the capture script.
+  /scripts/skyline-lookdev.html?preset=desktop   (or preset=phone)
+  Options: &terrain=procedural (before/after), &bench=1 (per-effect timings), &live=1 (run the real
+  runtime loop for a few seconds and report the adaptive tier).
+  Sets window.__result = { png, stats, timings, bench, log } for the capture script.
 -->
 <html>
 <head>
 <meta charset="utf-8" />
 <style>html,body{margin:0;background:#000}canvas{display:block}</style>
 <script>
-  // Collect console errors/warnings so the capture script can report them.
   window.__log = [];
   for (const k of ['error', 'warn']) {
     const orig = console[k].bind(console);
@@ -25,51 +26,62 @@
 <canvas id="c"></canvas>
 <script type="module">
 import { createSkylineScene } from '/src/hero/scene.js';
+import { startHero } from '/src/hero/runtime.js';
 
 const params = new URLSearchParams(location.search);
-const preset = params.get('preset') ?? 'desktop';
-const [width, height] = preset === 'phone' ? [375, 812] : [1600, 900];
+const layout = params.get('preset') ?? 'desktop';
+const [width, height] = layout === 'phone' ? [375, 812] : [1600, 900];
+const canvas = document.getElementById('c');
+canvas.style.width = width + 'px';
+canvas.style.height = height + 'px';
 
 try {
-  const s = await createSkylineScene({ canvas: document.getElementById('c'), width, height, preset, dataUrl: '/public/data/skyline.json' });
-  if (params.get('raw')) s.renderer.render(s.scene, s.camera); // debug: no post-processing
-  else s.render();
-  const png = s.renderer.domElement.toDataURL('image/png');
-
-  let bench = null;
-  if (params.get('bench')) {
-    const gl = s.renderer.getContext();
-    const px = new Uint8Array(4);
-    const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    const time = (fn, n = 30) => {
-      for (let i = 0; i < 4; i++) fn();
-      sync();
-      const t = performance.now();
-      for (let i = 0; i < n; i++) { fn(); sync(); }
-      return +((performance.now() - t) / n).toFixed(2);
-    };
-    const { passes, water, scene, camera, renderer } = s;
-    const reflect = water.onBeforeRender;
-    bench = {};
-    bench.full = time(() => s.render());
-    passes.bloomPass.enabled = false; bench.noBloom = time(() => s.render()); passes.bloomPass.enabled = true;
-    passes.grainPass.enabled = false; bench.noGrain = time(() => s.render()); passes.grainPass.enabled = true;
-    water.onBeforeRender = () => {}; bench.noReflection = time(() => s.render()); water.onBeforeRender = reflect;
-    // Scene only, no post-processing at all (plain render to screen, still with reflection).
-    bench.sceneOnlyWithReflection = time(() => renderer.render(scene, camera));
-    // Isolate groups: render each alone (no reflection, no post).
-    water.onBeforeRender = () => {};
-    const kids = scene.children.slice();
-    const alone = (pred) => { kids.forEach((k) => (k.visible = pred(k))); const r = time(() => renderer.render(scene, camera)); kids.forEach((k) => (k.visible = true)); return r; };
-    bench.buildingsAlone = alone((k) => k.type === 'Group' && k.children.length > 20);
-    bench.mountainsAlone = alone((k) => k.geometry?.parameters?.widthSegments > 50);
-    bench.pointsAlone = alone((k) => k.isPoints);
-    bench.skyAlone = alone((k) => k.renderOrder === -1);
-    water.onBeforeRender = reflect;
+  if (params.get('live')) {
+    const tiers = [];
+    const { hero, stop } = await startHero({ canvas, layout, dataUrl: '/public/data/skyline.json', onTierChange: (t, fps) => tiers.push({ tier: t, fps: +fps.toFixed(1) }) });
+    // &slow=ms simulates a slow device (busy-wait per frame) to exercise the tier drop.
+    const slow = +(params.get('slow') ?? 0);
+    if (slow) { const r = hero.render; hero.render = (t) => { const e = performance.now() + slow; while (performance.now() < e); r(t); }; }
+    await new Promise((r) => setTimeout(r, 6000));
+    stop();
+    window.__result = { png: canvas.toDataURL('image/png'), tiers, stats: hero.stats, log: window.__log };
+  } else {
+    const s = await createSkylineScene({
+      canvas, width, height, layout, dataUrl: '/public/data/skyline.json',
+      terrain: params.get('terrain') ?? 'dem',
+      // Stills: desktop at 1600×900 exactly; phone at its starting tier (1.5× density).
+      maxPixelRatio: layout === 'phone' ? 1.5 : 1,
+      devicePixelRatio: layout === 'phone' ? 3 : 1, // simulate a phone screen in the headless capture
+      tier: layout === 'phone' ? 'medium' : 'high',
+    });
+    if (params.get('bearing')) s.aim(+params.get('bearing'), +(params.get('pitch') ?? 0)); // comparison views
+    s.render(3.0);
+    const png = s.renderer.domElement.toDataURL('image/png');
+    let bench = null;
+    if (params.get('bench')) {
+      const gl = s.renderer.getContext();
+      const px = new Uint8Array(4);
+      const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const time = (fn, n = 30) => {
+        for (let i = 0; i < 4; i++) fn();
+        sync();
+        const t = performance.now();
+        for (let i = 0; i < n; i++) { fn(); sync(); }
+        return +((performance.now() - t) / n).toFixed(2);
+      };
+      const { passes, water } = s;
+      const reflect = water.onBeforeRender;
+      bench = {};
+      bench.full = time(() => s.render());
+      passes.bloomPass.enabled = false; bench.noBloom = time(() => s.render()); passes.bloomPass.enabled = true;
+      passes.grainPass.enabled = false; bench.noGrain = time(() => s.render()); passes.grainPass.enabled = true;
+      water.onBeforeRender = () => {}; bench.noReflection = time(() => s.render()); water.onBeforeRender = reflect;
+      s.points.visible = false; bench.noLightSprites = time(() => s.render()); s.points.visible = true;
+    }
+    window.__result = { png, stats: s.stats, timings: s.timings, bench, log: window.__log };
   }
-  window.__result = { png, stats: s.stats, timings: s.timings, bench, log: window.__log };
 } catch (e) {
-  window.__result = { png: '', error: String(e && e.stack || e), log: window.__log };
+  window.__result = { png: '', error: String((e && e.stack) || e), log: window.__log };
 }
 </script>
 </body>

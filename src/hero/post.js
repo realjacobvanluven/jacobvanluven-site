@@ -38,12 +38,17 @@ export function createComposer(renderer, scene, camera, { width, height, pixelRa
     bloom.radius ?? 0.45,
     bloom.threshold ?? 1.4,
   );
+  // UnrealBloomPass always blurs at half the size it's given; scale that so phones can bloom at a quarter.
+  const bloomSetSize = bloomPass.setSize.bind(bloomPass);
+  bloomPass.scale = bloomScale;
+  bloomPass.setSize = (w, h) => bloomSetSize(Math.max(2, w * bloomPass.scale * 2), Math.max(2, h * bloomPass.scale * 2));
   const outputPass = new OutputPass();
   const grainPass = new ShaderPass(GrainShader);
   grainPass.uniforms.uRes.value.set(width * pixelRatio, height * pixelRatio);
   grainPass.uniforms.uGrain.value = grain;
 
   composer.addPass(renderPass);
+  bloomPass.setSize(width * pixelRatio, height * pixelRatio);
   composer.addPass(bloomPass);
   composer.addPass(outputPass);
   composer.addPass(grainPass);

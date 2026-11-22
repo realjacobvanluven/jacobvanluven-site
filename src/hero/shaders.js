@@ -19,9 +19,9 @@ uniform vec3 uSunDir;
 vec3 skyColor(vec3 d) {
   float y = d.y;
   float h = max(y, 0.0);
-  vec3 zenith = vec3(0.0035, 0.009, 0.040);
-  vec3 mid = vec3(0.010, 0.026, 0.095);
-  vec3 horizon = vec3(0.040, 0.060, 0.140);
+  vec3 zenith = vec3(0.003, 0.008, 0.042);
+  vec3 mid = vec3(0.007, 0.022, 0.095);
+  vec3 horizon = vec3(0.028, 0.050, 0.135);
   vec3 c = mix(horizon, mid, smoothstep(0.0, 0.16, h));
   c = mix(c, zenith, smoothstep(0.12, 0.75, h));
 
@@ -30,10 +30,9 @@ vec3 skyColor(vec3 d) {
   vec2 sh = normalize(uSunDir.xz);
   float toward = clamp(dot(dh, sh) * 0.5 + 0.5, 0.0, 1.0); // clamp: pow() of a tiny negative is NaN
   float band = exp(-h * 11.0);
-  c += vec3(1.00, 0.36, 0.08) * pow(toward, 6.0) * band * 0.55;
-  c += vec3(0.80, 0.40, 0.22) * pow(toward, 2.5) * exp(-h * 6.0) * 0.05;
-  // Faint violet belt opposite the glow.
-  c += vec3(0.05, 0.03, 0.08) * pow(1.0 - toward, 3.0) * exp(-h * 8.0) * 0.3;
+  // Amber-orange, hugging the horizon; deep navy stays overhead.
+  c += vec3(1.00, 0.50, 0.12) * pow(toward, 5.0) * exp(-h * 16.0) * 0.8;
+  c += vec3(1.00, 0.60, 0.22) * pow(toward, 3.0) * exp(-h * 12.0) * 0.06;
 
   if (y < 0.0) {
     // Below the horizon (only seen in reflections and haze): darker, still tinted by the glow.
