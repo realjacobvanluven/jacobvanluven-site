@@ -111,6 +111,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   `src/hero/viaduct.js` draws the Georgia and Dunsmuir Viaducts **as they stood before demolition (2022–25)**:
   elevated decks on piers (~10 m crown, approximate), lamps, one-way traffic; centrelines from OSM, chained by
   `scripts/build-skyline-data.mjs` into `viaducts` in the data file (and kept out of the ground `roads`).
+- **Seaplanes (2026-11-22):** `src/hero/seaplanes.js`: Harbour Air-style floatplanes (low-poly, blue stripe, no logo, nav lights
+  and strobe) to and from Coal Harbour, one at a time, every ~45-90 s, alternating arrivals (from the east over the inlet) and
+  departures (climbing out north-west). The harbour is hidden behind the towers, so planes drop out of sight behind the skyline
+  as they land. Hand-placed approximate paths, jittered per flight. Scenery only, no hotspot. `&plane=arrival:0.4` in the lookdev
+  page freezes one for a still.
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange
   stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
   (`summary` prop in `src/pages/index.astro`), then the headline and subheading.

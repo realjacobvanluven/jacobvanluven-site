@@ -66,6 +66,14 @@ try {
       s.scene.traverse((o) => { if (o.userData.signatures) o.material = new THREE.MeshBasicMaterial({ color: 0xff6a00 }); });
     }
     if (params.get('bearing')) s.look({ bearing: +params.get('bearing'), pitch: +(params.get('pitch') ?? 0), fov: params.get('fov') ? +params.get('fov') : undefined }); // comparison / close-up views
+    // &plane=arrival:0.4 (or departure:0.6): freeze a floatplane at that point of its flight.
+    if (params.get('plane')) {
+      const [kind, u] = params.get('plane').split(':');
+      const arr = s.planeLights.geometry.attributes.position;
+      s.seaplanes.preview(kind, +u, arr.array);
+      arr.needsUpdate = true;
+      s.seaplanes.update = () => {};
+    }
     s.render(+(params.get('time') ?? 3)); // &time=seconds: animation time for the still
     // &probe=x,y (CSS px): what's under that pixel (debugging).
     if (params.get('probe')) {

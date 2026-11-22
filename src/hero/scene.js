@@ -13,6 +13,7 @@ import { createSeawall } from './seawall.js';
 import { createBridge } from './bridge.js';
 import { createViaducts } from './viaduct.js';
 import { createSkytrain } from './skytrain.js';
+import { createSeaplanes } from './seaplanes.js';
 import { createBoats, createAquabus } from './boats.js';
 import { createComposer } from './post.js';
 
@@ -56,8 +57,8 @@ export const framingFor = (aspect) => (aspect < 1 ? FRAMING.phone : FRAMING.desk
 export const TURN_BEARING = { desktop: 38, phone: 56 };
 
 const SCENE_DETAIL = {
-  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600 },
-  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000 },
+  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600, planeScale: 1.6 },
+  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000, planeScale: 2.8 },
 };
 
 function insideRing([x, y], r) {
@@ -308,6 +309,15 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     skytrainStats = st.stats;
   }
 
+  // Floatplanes to and from Coal Harbour: one at a time, slow timer, mostly seen against the sky.
+  const seaplanes = createSeaplanes({ scale: detail.planeScale });
+  scene.add(seaplanes.group);
+  const planeLights = createLightPoints(seaplanes.lights, uniforms);
+  planeLights.frustumCulled = false;
+  scene.add(planeLights);
+  const plp = planeLights.geometry.attributes.position;
+  animators.push((time) => { seaplanes.update(plp.array, time); plp.needsUpdate = true; });
+
   // Keep the water right below the camera calm (it holds the headline on phones): no boats within 220 m.
   await breathe();
   const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
@@ -419,7 +429,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   }
 
   return {
-    renderer, scene, camera, composer, passes, water, uniforms, points, anchors, project, viewOf,
+    renderer, scene, camera, composer, passes, water, uniforms, points, anchors, seaplanes, planeLights, project, viewOf,
     get tier() { return tierName; },
     get framing() { return framing; },
     setTier: applyTier,
