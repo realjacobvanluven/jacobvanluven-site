@@ -40,7 +40,7 @@ const USER_AGENT = 'skyline-data-build/1.0 (static site preprocessing script)';
 const CAMERA = { lat: 49.27175, lon: -123.1078 };
 /** Crop wedge: keep buildings within these compass bearings (clockwise, wrapping through north) of APEX.
  *  APEX sits ~130 m inland of the camera so the wedge is wide enough at the shoreline. */
-const VIEW = { apex: { lat: 49.2706, lon: -123.1078 }, fromBearing: 275, toBearing: 65, maxDistance: 3000, minNorth: 30 };
+const VIEW = { apex: { lat: 49.2706, lon: -123.1078 }, fromBearing: 252, toBearing: 65, maxDistance: 3000, minNorth: -400 };
 /** Download box (lat/lon) that safely contains the wedge. */
 const BBOX = { south: 49.268, west: -123.15, north: 49.2975, east: -123.08 };
 
