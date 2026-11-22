@@ -15,6 +15,7 @@ import '@fontsource-variable/unbounded'; // the name only (chosen 2026-11-21)
 import { getImage } from 'astro:assets';
 import posterDesktop from '../assets/hero/poster-desktop.jpg';
 import posterPhone from '../assets/hero/poster-phone.jpg';
+import avatar from '../assets/jacob-avatar-night.svg';
 import { heroStops } from '../data/hero-stops';
 
 interface Props {
@@ -67,6 +68,14 @@ const stops = await heroStops();
     </div>
 
     <div class="copy" data-copy>
+      <img
+        class="avatar"
+        src={avatar.src}
+        width="800"
+        height="800"
+        alt="Illustrated portrait of Jacob Van Luven"
+        decoding="async"
+      />
       <h1 id="hero-title" class="name" data-name>
         <span class="name-line" data-text="Jacob">Jacob</span>{' '}
         <span class="name-line" data-text="Van Luven">Van Luven</span>
@@ -150,6 +159,7 @@ const stops = await heroStops();
     inset: 0;
     pointer-events: none;
     background:
+      radial-gradient(ellipse 55% 60% at 50% 52%, rgb(4 6 14 / 0.55), transparent 75%),
       linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent 18%),
       linear-gradient(to top, rgb(4 6 14 / 0.75), transparent 45%);
   }
@@ -168,14 +178,33 @@ const stops = await heroStops();
     opacity: 1;
   }
 
+  /* One centred column: portrait, name, summary, headline, skip link. It fills the middle of the screen;
+     the gaps let pointer events through so the skyline can still be dragged and hotspots clicked. */
   .copy {
     position: absolute;
-    left: var(--gutter);
-    right: var(--gutter);
-    bottom: clamp(2rem, 9svh, 6rem);
-    max-width: 44rem;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(4.25rem, 9svh, 6rem) var(--gutter) clamp(2.5rem, 7svh, 4rem);
+    text-align: center;
     text-shadow: 0 2px 18px rgb(0 0 0 / 0.6);
+    pointer-events: none;
     transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+
+  .copy .skip {
+    pointer-events: auto;
+  }
+
+  .avatar {
+    width: clamp(7rem, min(33svh, 62vw), 25rem);
+    height: auto;
+    aspect-ratio: 1;
+    margin: 0 0 clamp(0.75rem, 2.5svh, 1.5rem);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5), 0 24px 70px rgb(0 0 0 / 0.65), 0 0 90px rgb(255 122 26 / 0.22);
   }
 
   .copy.away {
@@ -192,10 +221,10 @@ const stops = await heroStops();
     --ey: 0.014em;
     --rx: 0deg;
     --ry: 0deg;
-    margin: 0 0 0.9rem;
+    margin: 0 0 clamp(0.6rem, 1.8svh, 1rem);
     font-family: 'Unbounded Variable', var(--font-display);
     font-weight: 800;
-    font-size: clamp(2.8rem, 7.4vw, 5.9rem);
+    font-size: clamp(2.8rem, min(8.4vw, 9.5svh), 7.2rem);
     line-height: 0.95;
     letter-spacing: -0.02em;
     text-transform: uppercase;
@@ -216,7 +245,7 @@ const stops = await heroStops();
       calc(var(--ex) * 14) calc(var(--ey) * 16) 0.18em rgb(0 0 0 / 0.65),
       0 0 0.45em rgb(255 122 26 / 0.28);
     transform: perspective(70rem) rotateX(var(--rx)) rotateY(var(--ry));
-    transform-origin: 20% 60%;
+    transform-origin: 50% 60%;
     transition: transform 0.25s ease-out;
   }
 
@@ -224,6 +253,7 @@ const stops = await heroStops();
     position: relative;
     display: block;
     width: fit-content;
+    margin-inline: auto;
   }
 
   /* A slow highlight sweeping across the face of the letters. */
@@ -257,8 +287,8 @@ const stops = await heroStops();
   }
 
   .summary {
-    margin: 0 0 1.1rem;
-    font: 500 clamp(0.78rem, 1.3vw, 0.95rem) var(--font-mono);
+    margin: 0 0 clamp(0.7rem, 2svh, 1.1rem);
+    font: 500 clamp(0.78rem, 1.5vw, 1.05rem) var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--accent-soft);
@@ -276,11 +306,11 @@ const stops = await heroStops();
   }
 
   .headline {
-    max-width: 34rem;
-    margin: 0 0 1.25rem;
+    max-width: 40rem;
+    margin: 0 0 clamp(0.9rem, 2.5svh, 1.5rem);
     font-family: var(--font-display);
     font-weight: 500;
-    font-size: clamp(1.15rem, 2.1vw, 1.6rem);
+    font-size: clamp(1.05rem, min(2.4vw, 3.3svh), 1.85rem);
     line-height: 1.3;
     color: var(--text);
   }
