@@ -67,6 +67,46 @@ export function createFacadeMaterial(uniforms) {
       varying float vKind;
       varying float vTop;
 
+      // A lit room seen through the glass (interior mapping): a box behind the facade, so ceiling, back wall,
+      // side walls and floor shift with the camera instead of the window being a flat lit rectangle.
+      // q: position on the window plane in room units (x along, y up, 0…1); dir: view ray in room space
+      // (x along, y up, z into the room); room: width, height, depth (m).
+      vec3 roomInterior(vec2 q, vec3 dir, vec3 room, vec3 lampCol, float seed, float office) {
+        vec3 p = vec3(q * room.xy, 0.0);
+        vec3 d = sign(dir) * max(abs(dir), vec3(1e-4));
+        vec3 tt = (step(0.0, d) * room - p) / d;
+        float t = min(min(tt.x, tt.y), tt.z);
+        vec3 h = (p + d * t) / room; // hit point, 0…1 in each axis
+        float fall = 1.0 - 0.45 * h.z; // light falls off into the room
+        vec3 col;
+        if (t == tt.y && d.y > 0.0) {
+          // Ceiling: a pool around the light fixture; offices get rows of panel lights.
+          vec2 c = h.xz - vec2(0.25 + 0.5 * fract(seed * 7.3), 0.35);
+          float spot = exp(-dot(c, c) * 14.0);
+          vec2 pg = fract(vec2(h.x * room.x / 2.4, h.z * room.z / 1.8));
+          float panels = step(0.18, pg.x) * step(pg.x, 0.62) * step(0.25, pg.y) * step(pg.y, 0.6);
+          col = lampCol * mix(0.45 + 2.2 * spot, 0.3 + 2.0 * panels, office);
+        } else if (t == tt.y) {
+          // Floor: darker; wood or carpet tone.
+          col = lampCol * mix(vec3(0.22, 0.15, 0.1), vec3(0.14, 0.14, 0.16), office) * (0.6 + 0.6 * fall);
+        } else if (t == tt.z) {
+          // Back wall, with furniture (sofa / cabinet / desks) and sometimes a picture or a doorway.
+          col = lampCol * 0.55 * mix(0.85, 1.0, h.y);
+          float fx = fract(seed * 13.1), fw = 0.18 + 0.25 * fract(seed * 5.7);
+          float furniture = step(abs(h.x - 0.2 - 0.6 * fx), fw) * step(h.y, mix(0.3, 0.28, office) + 0.08 * fract(seed * 3.3));
+          col *= 1.0 - 0.85 * furniture;
+          float pic = (1.0 - office) * step(0.5, fract(seed * 17.0)) * step(abs(h.x - 0.75 + 0.5 * fx), 0.09) * step(abs(h.y - 0.6), 0.08);
+          col = mix(col, lampCol * vec3(0.25, 0.22, 0.3), pic);
+          float door = step(0.6, fract(seed * 23.0)) * step(abs(h.x - 0.85), 0.07) * step(h.y, 0.75);
+          col *= 1.0 - 0.6 * door;
+        } else {
+          // Side walls.
+          col = lampCol * 0.36 * fall;
+          col *= 1.0 - 0.6 * office * step(h.y, 0.3) * step(0.5, fract(h.z * room.z / 2.0)); // desk rows
+        }
+        return col;
+      }
+
       void main() {
         vec3 n = normalize(vNormal);
         vec3 V = normalize(cameraPosition - vWorld);
@@ -80,19 +120,28 @@ export function createFacadeMaterial(uniforms) {
         float ao = mix(0.45, 1.0, smoothstep(0.0, 7.0, vWorld.y));
 
         if (n.y > 0.5) {
-          vec3 roof = vec3(0.016, 0.018, 0.024) * (0.7 + 0.6 * hash12(vec2(vSeed * 91.0, 3.0)));
+          // Roofs: per building dark tar, grey membrane (with seams) or a green roof; patchy up close.
+          float rk = hash12(vec2(vSeed * 47.0, 5.0));
+          float rn = hash12(floor(vWorld.xz / 3.0) + vSeed * 31.0) * 0.5 + hash12(floor(vWorld.xz / 0.7)) * 0.5;
+          vec3 roof = rk < 0.45 ? vec3(0.016, 0.018, 0.024) : rk < 0.88 ? vec3(0.04, 0.042, 0.05) : vec3(0.012, 0.017, 0.012);
+          roof *= (0.75 + 0.5 * hash12(vec2(vSeed * 91.0, 3.0))) * (0.8 + 0.4 * rn);
+          vec2 rf = fwidth(vWorld.xz);
+          float seam = step(0.45, rk) * step(rk, 0.88) * (1.0 - smoothstep(0.04, 0.04 + rf.x, abs(fract(vWorld.x / 1.6) - 0.5) - 0.46));
+          roof *= 1.0 - 0.25 * seam * (1.0 - smoothstep(0.1, 0.4, rf.x));
           gl_FragColor = vec4(applyFog(roof, vWorld), 1.0);
           return;
         }
         // Rooftop equipment: plain walls, no windows.
         if (vKind > 2.5) {
-          vec3 plant = vec3(0.05, 0.052, 0.058) * (0.6 + 0.4 * n.y) * vec3(0.6, 0.66, 0.85);
+          float louvre = 0.85 + 0.15 * step(0.5, fract(vWorld.y * 4.0));
+          vec3 plant = vec3(0.05, 0.052, 0.058) * (0.6 + 0.4 * n.y) * vec3(0.6, 0.66, 0.85) * louvre;
           gl_FragColor = vec4(applyFog(plant, vWorld), 1.0);
           return;
         }
 
         // Facade grid. u along the wall, v up. Panel widths and floor heights by kind.
         vec2 t = normalize(vec2(-n.z, n.x));
+        vec3 T = vec3(t.x, 0.0, t.y);
         float u = dot(vWorld.xz, t);
         float floorH = isConcrete * 3.0 + isResi * 2.9 + isOffice * 3.8;
         float colW = isConcrete * 1.9 + isResi * 1.25 + isOffice * 1.5;
@@ -101,6 +150,8 @@ export function createFacadeMaterial(uniforms) {
         vec2 f = fract(g);
         vec2 fw = fwidth(g);
         vec2 aa = max(fw, vec2(0.001));
+        // How much close-up detail this pixel can show (1 when a window panel spans many pixels).
+        float detail = 1.0 - smoothstep(0.05, 0.22, max(fw.x, fw.y));
 
         // Glazed area inside each cell.
         vec2 lo = isConcrete * vec2(0.2, 0.32) + isResi * vec2(0.04, 0.2) + isOffice * vec2(0.03, 0.3);
@@ -132,40 +183,58 @@ export function createFacadeMaterial(uniforms) {
         vec3 lampCol = r3 < 0.55 ? warm : (r3 < 0.85 ? neutral : cool);
         lampCol = mix(lampCol, mix(neutral, cool, 0.5), isOffice);
         float bright = mix(0.3, 1.2, r2 * r2) * mix(1.0, 0.55, isOffice);
+        // Office floors are one room: every panel on a floor shares the light level.
+        bright = mix(bright, mix(0.45, 0.7, floorRand), isOffice);
         // Blinds: dimmer, faint slats.
         float blinds = step(0.75, hash12(unit + vSeed * 7.0)) * (1.0 - isOffice);
-        bright *= mix(1.0, 0.45 * (0.8 + 0.2 * step(0.5, fract(f.y * 9.0))), blinds);
+        float slats = 0.8 + 0.2 * step(0.5, fract(f.y * 9.0));
         // TV flicker: a few blue-white windows whose brightness jitters.
         float tv = step(0.965, hash12(unit * 3.1 + vSeed * 11.0)) * isResi;
         float flick = 0.55 + 0.45 * hash12(vec2(floor(uTime * 7.0), unit.x + unit.y * 13.0));
         lampCol = mix(lampCol, vec3(0.55, 0.7, 1.0), tv);
         bright = mix(bright, bright * flick, tv);
-        // Ceiling lights: a little brighter toward the top of the window.
-        bright *= mix(0.75, 1.1, f.y);
         lampCol = mix(lampCol, warm, ground * 0.6);
-        vec3 lampEmit = lampCol * bright * uWindowIntensity * lit * (1.0 + ground * 0.15);
+        float emitK = uWindowIntensity * lit * (1.0 + ground * 0.15);
+        // Flat (distant) version of a lit window: ceiling lights make the top a little brighter.
+        vec3 flatRoom = lampCol * mix(0.75, 1.1, f.y);
 
-        // Base materials under blue-hour sky light.
+        // Base materials under blue-hour sky light. Each building gets its own cladding: grey concrete,
+        // warm beige, dark brick-brown or painted white.
         float skyAmb = 0.55 + 0.45 * n.y;
         float westFacing = max(dot(n, sunFlat), 0.0);
-        vec3 concrete = vec3(0.12, 0.12, 0.125) * (0.7 + 0.6 * hash12(vec2(vSeed * 7.0, 1.0)));
+        float pick = hash12(vec2(vSeed * 5.3, 2.0));
+        vec3 clad = pick < 0.45 ? vec3(0.12, 0.12, 0.125) : pick < 0.7 ? vec3(0.14, 0.122, 0.1) : pick < 0.88 ? vec3(0.075, 0.062, 0.055) : vec3(0.17, 0.17, 0.168);
+        vec3 concrete = clad * (0.75 + 0.5 * hash12(vec2(vSeed * 7.0, 1.0)));
+        // Weathering: large faint patches and, up close, rain streaks running down from the sills.
+        concrete *= 0.9 + 0.2 * hash12(floor(vec2(u / 7.0, vWorld.y / 9.0)) + vSeed * 19.0);
+        float streak = hash12(vec2(floor(u / 0.3), vSeed * 41.0));
+        float underSill = m.x * (1.0 - step(lo.y, f.y)) * smoothstep(0.0, lo.y, f.y);
+        concrete *= 1.0 - detail * (0.22 * underSill * streak + 0.06 * streak);
         vec3 wallLit = concrete * skyAmb * vec3(0.55, 0.62, 0.85) + concrete * westWarm * westFacing * 0.2;
-        vec3 slabCol = vec3(0.16, 0.16, 0.165) * skyAmb * vec3(0.6, 0.66, 0.86) + lampEmit * 0.04;
+        // Concrete: a lighter sill under each window and a floor line.
+        float sill = isConcrete * m.x * step(lo.y - 0.05, f.y) * (1.0 - step(lo.y, f.y));
+        float floorLine = isConcrete * (1.0 - smoothstep(0.03 - aa.y, 0.05 + aa.y, f.y));
+        wallLit *= 1.0 + detail * (0.35 * sill - 0.18 * floorLine);
+        vec3 slabCol = vec3(0.16, 0.16, 0.165) * skyAmb * vec3(0.6, 0.66, 0.86) + lampCol * bright * emitK * 0.04;
 
-        vec3 R = reflect(-V, n);
+        // Glass: each pane sits at a slightly different angle, so reflections break up pane by pane.
+        vec2 pr = vec2(hash12(cell * 3.1 + vSeed * 7.0), hash12(cell * 5.7 + vSeed * 3.0)) - 0.5;
+        vec3 np = normalize(n + (T * pr.x * 0.09 + vec3(0.0, pr.y * 0.06, 0.0)) * detail);
+        vec3 R = reflect(-V, np);
         R.y = abs(R.y) * 0.9 + 0.02;
-        float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
-        vec3 tint = mix(vec3(0.008, 0.014, 0.02), vec3(0.012, 0.018, 0.016), hash12(vec2(vSeed * 3.0, 9.0)));
+        float fres = 0.04 + 0.96 * pow(1.0 - max(dot(np, V), 0.0), 5.0);
+        vec3 tint = mix(vec3(0.008, 0.014, 0.02), vec3(0.008, 0.018, 0.017), hash12(vec2(vSeed * 3.0, 9.0)));
         vec3 glassCol = tint + skyColor(R) * mix(0.25, 0.9, fres);
+        // The city reflected in the glass: a faint band of distant lit windows near the horizon.
+        float az = atan(R.x, R.z);
+        float cityBand = (1.0 - smoothstep(0.0, 0.12, R.y)) * step(0.9, hash12(floor(vec2(az * 420.0, R.y * 900.0))));
+        glassCol += vec3(1.0, 0.7, 0.4) * cityBand * 0.14 * detail * mix(0.4, 1.0, fres);
 
         vec3 frameCol = mix(wallLit, vec3(0.018, 0.02, 0.025), 1.0 - isConcrete);
         frameCol = mix(frameCol, vec3(0.012, 0.013, 0.016), isOffice); // spandrels
         frameCol *= ao;
         glassCol *= ao;
         slabCol *= ao;
-        vec3 windowCol = glassCol * (1.0 - lit * 0.85) + lampEmit;
-        vec3 near = mix(frameCol, windowCol, isWindow);
-        near = mix(near, slabCol, slab);
 
         // Far away: average instead of aliasing.
         float avgLit = mix(litShare, 0.27, isOffice);
@@ -175,8 +244,49 @@ export function createFacadeMaterial(uniforms) {
         far = mix(far, slabCol * 0.6, isResi * 0.16);
         // Keep individual windows until they're well under a pixel (a little sparkle reads as city lights).
         float farMix = smoothstep(0.7, 1.8, max(fw.x, fw.y));
-        vec3 col = mix(near, far, farMix);
+        vec3 col = far;
 
+        if (farMix < 0.999) {
+          vec3 room = flatRoom;
+          if (lit > 0.5 && detail > 0.001) {
+            // Room behind this window: the unit (several panels wide), one floor high, 4–6 m deep
+            // (open-plan office floors are deeper).
+            vec3 dims = vec3(unitW * colW, floorH, mix(4.0 + 2.0 * r3, 11.0, isOffice));
+            vec2 q = vec2((cell.x - unit.x * unitW + f.x) / unitW, f.y);
+            vec3 dir = vec3(dot(-V, T), -V.y, dot(V, n));
+            vec3 inside = roomInterior(q, dir, dims, lampCol, r1 * 0.37 + r3 * 0.63, isOffice) * 1.25;
+            // Curtains drawn partway in from the sides (homes), with soft folds; the light glows through.
+            float cl = (1.0 - isOffice) * step(0.4, r2) * (0.08 + 0.3 * hash12(unit + 4.0));
+            float cr = (1.0 - isOffice) * step(0.3, r3) * (0.06 + 0.25 * hash12(unit + 9.0));
+            float curtain = max(1.0 - smoothstep(cl - 0.01, cl + 0.01, q.x), smoothstep(1.0 - cr - 0.01, 1.0 - cr + 0.01, q.x));
+            vec3 fabric = lampCol * mix(vec3(0.5, 0.42, 0.34), vec3(0.4, 0.4, 0.42), fract(r1 * 9.0)) * (0.8 + 0.2 * sin(q.x * unitW * colW * 9.0));
+            inside = mix(inside, fabric, curtain);
+            room = mix(flatRoom, inside, detail);
+          }
+          room = mix(room, lampCol * 0.45 * slats, blinds);
+          vec3 lampEmit = room * bright * emitK;
+          // Lit glass still reflects a little; dark glass is mostly reflection.
+          vec3 windowCol = glassCol * (1.0 - lit * 0.75) + lampEmit;
+
+          // Mullions: punched windows split into two panes; condo glass gets a transom near the top;
+          // a recess shadow along the head of punched windows.
+          float mullion = isConcrete * (1.0 - smoothstep(0.012, 0.012 + aa.x, abs(f.x - 0.5)));
+          mullion += isResi * step(0.5, fract(vSeed * 37.0)) * (1.0 - smoothstep(0.012, 0.012 + aa.y, abs(f.y - 0.8)));
+          mullion += isOffice * (1.0 - smoothstep(0.015, 0.015 + aa.x, min(f.x - lo.x, hi.x - f.x)));
+          windowCol = mix(windowCol, frameCol * 0.8 + lampEmit * 0.05, clamp(mullion, 0.0, 1.0) * detail);
+          float recess = isConcrete * smoothstep(hi.y - 0.09, hi.y, f.y) * detail;
+          windowCol *= 1.0 - 0.45 * recess;
+
+          // Condo balconies: a frosted glass railing across the lower part of each floor, with a top rail.
+          float rail = isResi * step(0.16, f.y) * (1.0 - step(0.42, f.y)) * step(0.35, hash12(vec2(unit.x, vSeed * 3.0)));
+          float topRail = isResi * (1.0 - smoothstep(0.008, 0.008 + aa.y, abs(f.y - 0.42))) * step(0.35, hash12(vec2(unit.x, vSeed * 3.0)));
+          windowCol = mix(windowCol, windowCol * 0.7 + skyColor(R) * 0.12, rail * 0.6);
+          windowCol = mix(windowCol, slabCol * 1.2, topRail * detail);
+
+          vec3 near = mix(frameCol, windowCol, isWindow);
+          near = mix(near, slabCol, slab);
+          col = mix(near, far, farMix);
+        }
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
     `,

@@ -65,7 +65,7 @@ try {
       const THREE = await import('three');
       s.scene.traverse((o) => { if (o.userData.signatures) o.material = new THREE.MeshBasicMaterial({ color: 0xff6a00 }); });
     }
-    if (params.get('bearing')) s.aim(+params.get('bearing'), +(params.get('pitch') ?? 0)); // comparison views
+    if (params.get('bearing')) s.look({ bearing: +params.get('bearing'), pitch: +(params.get('pitch') ?? 0), fov: params.get('fov') ? +params.get('fov') : undefined }); // comparison / close-up views
     s.render(+(params.get('time') ?? 3)); // &time=seconds: animation time for the still
     const png = s.renderer.domElement.toDataURL('image/png');
     let bench = null;
