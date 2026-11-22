@@ -23,6 +23,10 @@ const experience = defineCollection({
     end: yearMonth.optional(),
     summary: z.string().optional(),
     skills: z.array(z.string()).default([]),
+    /** Tools and systems built in the role: a name, the tech, and what it does. No confidential detail. */
+    builds: z
+      .array(z.object({ name: z.string(), tech: z.string().optional(), what: z.string() }))
+      .default([]),
   }),
 });
 
