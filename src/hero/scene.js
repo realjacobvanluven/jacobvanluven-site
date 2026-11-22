@@ -291,7 +291,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
 
   // Keep the water right below the camera calm (it holds the headline on phones): no boats within 220 m.
   await breathe();
-  const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, envMap });
+  const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
   scene.add(boats.group);
   addLights(boats.lights, 2);
   // Two Aquabus ferries crossing False Creek in the foreground: candidate crossings (bearing/distance
