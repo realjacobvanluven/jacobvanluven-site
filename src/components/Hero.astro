@@ -580,7 +580,7 @@ const stops = await heroStops();
 
   /**
    * The reveal: any scroll past the top (or Tab into the cards, or "Skip to work") swaps the headline for
-   * the four section cards. `focus` is the card being hovered or focused (its landmark id), if any.
+   * the four section cards.
    */
   function setUpTour(root: HTMLElement) {
     const list = root.querySelector<HTMLElement>('[data-cards]')!;
@@ -707,8 +707,6 @@ const stops = await heroStops();
           pan.lastT = now;
           let target: View = { bearing: f.bearing + pan.value, pitch: f.pitch, fov: f.fov };
           if (tour.state.revealed) target = { bearing: f.bearing + pan.value, pitch: f.pitch - (portraitNow() ? 2.5 : 1.8), fov: f.fov };
-          const v = tour.state.focus ? hero.viewOf(tour.state.focus) : null;
-          if (v) target = { bearing: v.bearing, pitch: target.pitch + Math.max(-2, Math.min(3, v.pitch)) * 0.5, fov: f.fov * 0.82 };
           // Ease toward it (frame-rate independent).
           const dt = Math.min(0.1, (now - (lastNow || now)) / 1000);
           lastNow = now;
@@ -821,16 +819,6 @@ const stops = await heroStops();
       });
     }
 
-    // Following a marker or a card's link: fly the camera to the landmark, then open the page.
-    const fly = (id: string, href: string, e: MouseEvent) => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || flight || !current) return;
-      const target = ctl.hero.viewOf(id);
-      if (!target) return;
-      e.preventDefault();
-      flight = { from: current, to: { ...target, fov: current.fov * 0.45 }, t0: performance.now(), href };
-      ctl.poke();
-    };
-    for (const a of root.querySelectorAll<HTMLAnchorElement>('[data-go]')) a.addEventListener('click', (e) => fly(a.dataset.go!, a.href, e));
     window.addEventListener('pageshow', () => stage.classList.remove('leaving'));
   }
 </script>
