@@ -83,7 +83,6 @@ const stops = await heroStops();
         stops.map((s, i) => (
           <li class="card" style={`--i: ${i}`}>
             <a href={s.href} data-go={s.id}>
-              <span class="place">{s.place}</span>
               <span class="name">
                 {s.label} <span class="arrow" aria-hidden="true">→</span>
               </span>
@@ -404,13 +403,6 @@ const stops = await heroStops();
   .card a.active {
     border-color: var(--accent);
     background: rgb(14 12 12 / 0.82);
-  }
-
-  .card .place {
-    font: 500 0.75rem var(--font-mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent-soft);
   }
 
   .card .name {
