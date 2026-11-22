@@ -11,6 +11,7 @@ import { createLightPoints, aviationLights, distantLights } from './lights.js';
 import { bcPlace, harbourCentre, scienceWorld } from './landmarks.js';
 import { createSeawall } from './seawall.js';
 import { createBridge } from './bridge.js';
+import { createSkytrain } from './skytrain.js';
 import { createBoats, createAquabus } from './boats.js';
 import { createComposer } from './post.js';
 
@@ -33,6 +34,14 @@ export const FRAMING = {
  * Quality tiers. Phones start at "medium" (the four phone savings: 1.5× pixel density, quarter-res bloom,
  * quarter-res reflection, fewer lights). Adaptive quality (runtime.js) can drop a tier at a time.
  */
+/** Expo Line data: delta-encoded decimetre line and station points → metres. */
+function decodeSkytrain(raw) {
+  const line = [];
+  let x = 0, y = 0;
+  for (let i = 0; i < raw.line.length; i += 2) { x += raw.line[i]; y += raw.line[i + 1]; line.push([x / 10, y / 10]); }
+  return { line, stations: raw.stations.map((s) => ({ ...s, p: s.p.map((v) => v / 10) })) };
+}
+
 export const TIERS = {
   high: { pixelRatio: 2, reflectionScale: 0.5, bloomScale: 0.5, bloom: true, lightShare: 1, samples: 0 },
   medium: { pixelRatio: 1.5, reflectionScale: 0.25, bloomScale: 0.25, bloom: true, lightShare: 0.6, samples: 0 },
@@ -267,6 +276,19 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     animators.push((time) => { br.updateTraffic(pos.array, time); pos.needsUpdate = true; });
   }
 
+  // SkyTrain Expo Line: guideway, stations and trains between Main Street–Science World and Stadium.
+  let skytrainStats = null;
+  if (data.raw.skytrain) {
+    const st = createSkytrain(decodeSkytrain(data.raw.skytrain), uniforms);
+    scene.add(st.group);
+    addLights(st.lights, 1);
+    const trainLights = createLightPoints(st.trainLights, uniforms);
+    scene.add(trainLights);
+    const tp = trainLights.geometry.attributes.position;
+    animators.push((time) => { st.update(tp.array, time); tp.needsUpdate = true; });
+    skytrainStats = st.stats;
+  }
+
   // Keep the water right below the camera calm (it holds the headline on phones): no boats within 220 m.
   await breathe();
   const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, envMap });
@@ -387,7 +409,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, streets: streets.stats, waterfront: waterfront.stats, signatures: data.signatures.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {

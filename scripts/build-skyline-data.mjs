@@ -225,6 +225,13 @@ function osmGround() {
   return overpass('osm-ground.json', `[out:json][timeout:90];(way["highway"~"^(footway|path|cycleway|pedestrian)$"](${EXTRAS_BBOX});way["leisure"~"^(park|garden|playground|pitch)$"](${EXTRAS_BBOX});way["landuse"~"^(grass|recreation_ground)$"](${EXTRAS_BBOX});node["natural"="tree"](${EXTRAS_BBOX}););out tags geom;`);
 }
 
+/** SkyTrain (Expo Line) tracks and stations around Main Street–Science World and Stadium–Chinatown. */
+function osmRail() {
+  return overpass('osm-rail.json', `[out:json][timeout:90];
+(way["railway"~"^(subway|light_rail)$"](${EXTRAS_BBOX});node["railway"="station"](${EXTRAS_BBOX}););
+out tags geom;`);
+}
+
 /** Downtown streets (for streetlights and traffic). */
 function osmRoads() {
   const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
@@ -303,6 +310,7 @@ function osmRings(el) {
 const [fc2015, fc2009, osmData] = await Promise.all([cityFootprints(2015), cityFootprints(2009), osm()]);
 const extras = await osmExtras();
 const roadsData = await osmRoads();
+const railData = await osmRail();
 const groundData = await osmGround();
 
 const f15 = cityRings(fc2015, false);
@@ -454,6 +462,46 @@ for (const e of roadsData.elements) {
 
 const mask = buildWaterMask(shoreLines, MASK);
 
+// SkyTrain Expo Line: one continuous centreline from the east edge of the view through Main Street–Science
+// World station to the Dunsmuir tunnel portal past Stadium–Chinatown (chained from one track's OSM ways),
+// with a height per point: elevated on the viaduct (~9 m), ramping down to the portal.
+const expoWays = railData.elements.filter((e) => e.type === 'way' && /Expo Line/.test(e.tags?.name ?? '') && e.tags?.tunnel !== 'yes' && !e.tags?.service)
+  .map((e) => e.geometry.map((p) => toLocal([p.lon, p.lat])));
+const skytrainLine = [];
+{
+  const pool = expoWays.slice();
+  // Start at the easternmost endpoint.
+  let best = null;
+  for (const w of pool) for (const end of [0, w.length - 1]) if (!best || w[end][0] > best.p[0]) best = { w, end, p: w[end] };
+  let cur = best.end === 0 ? best.w : best.w.slice().reverse();
+  pool.splice(pool.indexOf(best.w), 1);
+  skytrainLine.push(...cur);
+  for (;;) {
+    const tail = skytrainLine[skytrainLine.length - 1];
+    let next = null;
+    for (const w of pool) for (const end of [0, w.length - 1]) {
+      const d = Math.hypot(w[end][0] - tail[0], w[end][1] - tail[1]);
+      if (d < 18 && (!next || d < next.d)) next = { w, end, d };
+    }
+    if (!next) break;
+    pool.splice(pool.indexOf(next.w), 1);
+    const seg = next.end === 0 ? next.w : next.w.slice().reverse();
+    skytrainLine.push(...seg.slice(1));
+  }
+}
+// The chain can run on to the other track and come back: stop at the point farthest from the start (the portal).
+{
+  const [sx, sy] = skytrainLine[0];
+  let far = 0;
+  skytrainLine.forEach(([x, y], i) => { if (Math.hypot(x - sx, y - sy) > Math.hypot(skytrainLine[far][0] - sx, skytrainLine[far][1] - sy)) far = i; });
+  skytrainLine.length = far + 1;
+}
+const stationNames = { 'Main Street–Science World': 'mainStreet', 'Stadium–Chinatown': 'stadium' };
+const skytrainStations = railData.elements.filter((e) => e.type === 'node' && stationNames[e.tags?.name])
+  .map((e) => ({ id: stationNames[e.tags.name], name: e.tags.name, p: toLocal([e.lon, e.lat]).map(dm) }));
+const skytrain = skytrainLine.length > 1 ? { line: encodeRing(simplify(skytrainLine, 0.5)), stations: skytrainStations } : null;
+console.log('SkyTrain:', skytrainLine.length, 'points', skytrainStations.map((s) => s.name).join(', '));
+
 // Waterfront/park detail near the camera (the most visible ground): paths, green areas, trees.
 const GROUND_RANGE = 1800;
 const nearView = (p) => inView(p) && Math.hypot(...p) < GROUND_RANGE;
@@ -567,6 +615,8 @@ const data = {
   signatures,
   // [class, ...line] (class 0 main road, 1 local street)
   roads,
+  // Expo Line centreline (delta-encoded, east → tunnel portal) and stations [{ id, name, p: [xDm, yDm] }]
+  skytrain,
   // Waterfront detail: [class, ...line] (0 footway, 1 cycleway); [kind, ...ring] (0 lawn/park, 1 sports field,
   // 2 playground); trees as one delta-encoded point list, nearest first.
   paths,
