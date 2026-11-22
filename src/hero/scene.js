@@ -8,9 +8,10 @@ import { createWaterfront } from './waterfront.js';
 import { createWater, createGround } from './water.js';
 import { createMountains, northShoreLightPoints, demHeightAt, terrainHeight } from './mountains.js';
 import { createLightPoints, aviationLights, distantLights } from './lights.js';
-import { bcPlace, harbourCentre, scienceWorld } from './landmarks.js';
+import { bcPlace, harbourCentre, scienceWorld, rogersArena } from './landmarks.js';
 import { createSeawall } from './seawall.js';
 import { createBridge } from './bridge.js';
+import { createViaducts } from './viaduct.js';
 import { createSkytrain } from './skytrain.js';
 import { createBoats, createAquabus } from './boats.js';
 import { createComposer } from './post.js';
@@ -223,6 +224,13 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     addLights(sw.lights.map((p) => ({ p, color: [3.2, 3.4, 3.8], size: 0.45 })), 1);
   }
 
+  if (L.rogersArena) {
+    const ra = rogersArena(L.rogersArena, envMap, { toward: L.bcPlace?.center });
+    scene.add(ra.group);
+    addLights(ra.lights.map((p) => ({ p, color: [7, 6, 4.6], size: 1.1 })), 1);
+    addLights(ra.signLights.map((p) => ({ p, color: [9, 0.9, 0.6], size: 1.3 })), 0);
+  }
+
   // Hotspot anchors (world coordinates) for the interactive hero.
   const anchors = {};
   if (L.bcPlace) anchors.bcPlace = [L.bcPlace.center[0], 64, -L.bcPlace.center[1]];
@@ -274,6 +282,17 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     scene.add(traffic);
     const pos = traffic.geometry.attributes.position;
     animators.push((time) => { br.updateTraffic(pos.array, time); pos.needsUpdate = true; });
+  }
+
+  // Georgia and Dunsmuir Viaducts, curving past Rogers Arena into downtown.
+  if (data.viaducts.length) {
+    const vd = createViaducts(data.viaducts, { envMap });
+    scene.add(vd.group);
+    addLights(vd.lights, 1);
+    const vdTraffic = createLightPoints(vd.carLights, uniforms);
+    scene.add(vdTraffic);
+    const vp = vdTraffic.geometry.attributes.position;
+    animators.push((time) => { vd.updateTraffic(vp.array, time); vp.needsUpdate = true; });
   }
 
   // SkyTrain Expo Line: guideway, stations and trains between Main Street–Science World and Stadium.

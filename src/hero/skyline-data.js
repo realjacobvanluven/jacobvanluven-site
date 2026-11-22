@@ -24,6 +24,15 @@ const centroid = (ring) => {
   return Math.abs(a) < 1e-9 ? ring[0] : [cx / (3 * a), cy / (3 * a)];
 };
 
+const pointInRing = ([x, y], ring) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
 const inBounds = ([x, y], [x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
 
 /** Principal axes of a footprint: centre, angle of the long axis, and half-extents along both axes. */
@@ -55,6 +64,9 @@ export async function loadSkyline(url) {
 
   const buildings = [];
   let bcPlace = null, harbourTower = [], scienceDome = null;
+  // Rogers Arena: its mapped footprint; the stepped parts inside it are replaced by the hand-built model.
+  const arenaRing = lm['rogers-arena']?.ring ? decodeRing(lm['rogers-arena'].ring) : null;
+  const arenaParts = [];
   for (const b of raw.buildings) {
     const ring = decodeRing(b, 3);
     const h = b[0] / 10, base = b[1] / 10;
@@ -62,6 +74,7 @@ export async function loadSkyline(url) {
     if (inBounds(c, bounds('bc-place')) && h > 50) { bcPlace = { ring, h }; continue; }
     if (inBounds(c, bounds('harbour-centre')) && h > 100) { harbourTower.push({ ring, h, c }); continue; }
     if (inBounds(c, bounds('science-world')) && h > 30) { scienceDome = { ring, h, c }; continue; }
+    if (arenaRing && h > 8 && pointInRing(c, arenaRing)) { arenaParts.push(h); continue; }
     buildings.push({ ring, h, base, c });
   }
 
@@ -77,6 +90,8 @@ export async function loadSkyline(url) {
     landmarks.scienceWorld = { center: e.center, radius: (e.a + e.b) / 2, top: scienceDome.h };
   }
 
+  if (arenaRing && arenaParts.length) landmarks.rogersArena = { ring: arenaRing, height: Math.max(...arenaParts) };
+
   return {
     buildings, landmarks,
     shoreline: raw.shoreline.map((l) => decodeRing(l)),
@@ -86,6 +101,7 @@ export async function loadSkyline(url) {
     docks: (raw.docks ?? []).map((l) => decodeRing(l)),
     boats: (raw.boats ?? []).map(([x, y, a, len, kind]) => ({ x: x / 10, y: y / 10, heading: (a / 1800) * Math.PI, length: len / 10, sail: kind === 1 })),
     signatures: (raw.signatures ?? []).map((sg) => ({ id: sg.id, height: sg.height, ring: decodeRing(sg.ring) })),
+    viaducts: (raw.viaducts ?? []).map((l) => decodeRing(l)),
     roads: (raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: decodeRing(line) })),
     paths: (raw.paths ?? []).map(([cls, ...line]) => ({ cycle: cls === 1, line: decodeRing(line) })),
     greens: (raw.greens ?? []).map(([kind, ...ring]) => ({ kind, ring: decodeRing(ring) })),

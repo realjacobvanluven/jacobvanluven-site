@@ -422,6 +422,8 @@ for (const l of LANDMARKS) {
   if (!found) { console.warn(`Landmark not found in OSM: ${l.name}`); continue; }
   const [x0, y0, x1, y1] = bounds(found.points);
   landmarkOut[l.id] = { name: l.name, center: [dm((x0 + x1) / 2), dm((y0 + y1) / 2)], bounds: [dm(x0), dm(y0), dm(x1), dm(y1)] };
+  // Rogers Arena is hand-built from its mapped footprint (the stepped 2009 parts are removed in the scene).
+  if (l.id === 'rogers-arena') landmarkOut[l.id].ring = encodeRing(cleanRing(found.points));
 }
 
 const shoreLines = coastline
@@ -451,7 +453,15 @@ for (const sig of SIGNATURES) {
 // Streets inside the view, simplified; class 0 = main road (traffic), 1 = local street.
 const ROAD_CLASS = { trunk: 0, primary: 0, secondary: 0, tertiary: 1, residential: 1, unclassified: 1 };
 const roads = [];
+// The Georgia and Dunsmuir Viaducts (demolished 2022–25, drawn as they stood) are elevated decks of their own,
+// chained from OSM ways west → east, so they're kept out of the ground-level road list.
+const VIADUCT_CHAINS = {
+  georgia: [507910545, 4645645, 35354254],
+  dunsmuir: [1368517838, 36767239, 35354252, 35354253, 36767233, 1285852098],
+};
+const viaductIds = new Set(Object.values(VIADUCT_CHAINS).flat());
 for (const e of roadsData.elements) {
+  if (viaductIds.has(e.id)) continue;
   if (e.type !== 'way' || !e.geometry || e.tags?.bridge === 'yes' || e.tags?.tunnel === 'yes') continue;
   const line = simplify(e.geometry.map((p) => toLocal([p.lon, p.lat])), 2);
   // The view wedge, plus everything close to the camera (the camera turns east toward Science World).
@@ -459,6 +469,28 @@ for (const e of roadsData.elements) {
   if (inside.length < 2) continue;
   roads.push([ROAD_CLASS[e.tags.highway] ?? 1, ...encodeRing(inside)]);
 }
+
+// [lineEncoded…] per viaduct, ordered west → east (the deck is at grade at the west end, by Beatty Street).
+const viaducts = Object.values(VIADUCT_CHAINS).map((ids) => {
+  const segs = ids.map((id) => {
+    const way = roadsData.elements.find((e) => e.id === id);
+    if (!way) throw new Error(`Viaduct way ${id} missing from the OSM road cache`);
+    return way.geometry.map((p) => toLocal([p.lon, p.lat]));
+  });
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  // Orient the first way so it ends where the second begins, then flip each next way to start where the chain ended.
+  const [f, g] = [segs[0], segs[1]];
+  const gEnds = [g[0], g[g.length - 1]];
+  if (Math.min(...gEnds.map((e) => d(f[0], e))) < Math.min(...gEnds.map((e) => d(f[f.length - 1], e)))) f.reverse();
+  const pts = [...f];
+  for (const seg of segs.slice(1)) {
+    const end = pts[pts.length - 1];
+    const ordered = d(seg[0], end) <= d(seg[seg.length - 1], end) ? seg : [...seg].reverse();
+    pts.push(...ordered.slice(1));
+  }
+  if (pts[0][0] > pts[pts.length - 1][0]) pts.reverse();
+  return encodeRing(simplify(pts, 0.6));
+});
 
 const mask = buildWaterMask(shoreLines, MASK);
 
@@ -615,6 +647,8 @@ const data = {
   signatures,
   // [class, ...line] (class 0 main road, 1 local street)
   roads,
+  // Georgia and Dunsmuir Viaduct centrelines (delta-encoded, west → east)
+  viaducts,
   // Expo Line centreline (delta-encoded, east → tunnel portal) and stations [{ id, name, p: [xDm, yDm] }]
   skytrain,
   // Waterfront detail: [class, ...line] (0 footway, 1 cycleway); [kind, ...ring] (0 lawn/park, 1 sports field,

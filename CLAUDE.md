@@ -103,6 +103,14 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 - **SkyTrain (2026-11-21):** the Expo Line from the east edge through Main Street–Science World to the Dunsmuir tunnel
   portal past Stadium–Chinatown (`src/hero/skytrain.js`, centreline from OSM in the data file): elevated guideway,
   both stations, trains both ways that stop at each station. Heights approximate (deck ~9 m).
+- **Rogers Arena and the viaducts (2026-11-22):** `rogersArena()` in `src/hero/landmarks.js` is hand-built: a smooth
+  rounded outline (superellipse) of the same area, position and orientation as the mapped footprint (the OSM
+  polygon is angular, so it only sets those); dark podium, curtain-glass concourse glazed on some stretches only,
+  metal cladding and a low dome roof in the same metal, two small red signs (south side and the side facing BC
+  Place). The stepped footprint parts inside it are removed in `skyline-data.js`. Scenery only, no hotspot.
+  `src/hero/viaduct.js` draws the Georgia and Dunsmuir Viaducts **as they stood before demolition (2022–25)**:
+  elevated decks on piers (~10 m crown, approximate), lamps, one-way traffic; centrelines from OSM, chained by
+  `scripts/build-skyline-data.mjs` into `viaducts` in the data file (and kept out of the ground `roads`).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange
   stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
   (`summary` prop in `src/pages/index.astro`), then the headline and subheading.
