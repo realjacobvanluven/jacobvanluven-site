@@ -96,6 +96,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   window (Lighthouse mobile 99). Posters in `src/assets/hero/` are rendered with `scripts/skyline-lookdev.html`
   (`&w=…&h=…&dpr=…`); re-render them whenever the scene's look changes.
   Hover/tap highlights + labels; click flies the camera in, then routes.
+- **Pan (2026-11-21):** drag (desktop), sideways swipe (touch), horizontal trackpad scroll or arrow keys turn the view
+  along the waterfront, from the Cambie Bridge to Science World; limits keep the frame inside the city data.
+- **SkyTrain (2026-11-21):** the Expo Line from the east edge through Main Street–Science World to the Dunsmuir tunnel
+  portal past Stadium–Chinatown (`src/hero/skytrain.js`, centreline from OSM in the data file): elevated guideway,
+  both stations, trains both ways that stop at each station. Heights approximate (deck ~9 m).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Space Grotesk 700, uppercase, an orange
   stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
   (`summary` prop in `src/pages/index.astro`), then the headline and subheading.

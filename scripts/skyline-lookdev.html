@@ -67,6 +67,15 @@ try {
     }
     if (params.get('bearing')) s.look({ bearing: +params.get('bearing'), pitch: +(params.get('pitch') ?? 0), fov: params.get('fov') ? +params.get('fov') : undefined }); // comparison / close-up views
     s.render(+(params.get('time') ?? 3)); // &time=seconds: animation time for the still
+    // &probe=x,y (CSS px): what's under that pixel (debugging).
+    if (params.get('probe')) {
+      const THREE = await import('three');
+      const [px, py] = params.get('probe').split(',').map(Number);
+      const rc = new THREE.Raycaster();
+      rc.setFromCamera(new THREE.Vector2((px / width) * 2 - 1, -(py / height) * 2 + 1), s.camera);
+      const hits = rc.intersectObjects(s.scene.children, true).slice(0, 4);
+      window.__log = (window.__log || []).concat(hits.map((h) => ({ d: Math.round(h.distance), type: h.object.type, mat: h.object.material?.type, verts: h.object.geometry?.attributes?.position?.count, attrs: Object.keys(h.object.geometry?.attributes ?? {}).join(','), p: h.point.toArray().map(Math.round) })));
+    }
     const png = s.renderer.domElement.toDataURL('image/png');
     let bench = null;
     if (params.get('bench')) {
