@@ -11,6 +11,7 @@
  *    gentle look-around. Hotspot markers sit on the landmarks; following one (or a card) flies the camera in.
  *  - Reduced motion / no JS / no WebGL: poster + headline, and the section cards below the hero (index.astro).
  */
+import '@fontsource-variable/unbounded'; // the name only (chosen 2026-11-21)
 import { getImage } from 'astro:assets';
 import posterDesktop from '../assets/hero/poster-desktop.jpg';
 import posterPhone from '../assets/hero/poster-phone.jpg';
@@ -192,11 +193,11 @@ const stops = await heroStops();
     --rx: 0deg;
     --ry: 0deg;
     margin: 0 0 0.9rem;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: clamp(3.1rem, 9vw, 7.5rem);
-    line-height: 0.88;
-    letter-spacing: -0.035em;
+    font-family: 'Unbounded Variable', var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2.8rem, 7.4vw, 5.9rem);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
     text-transform: uppercase;
     color: #fff3e6;
     text-shadow:

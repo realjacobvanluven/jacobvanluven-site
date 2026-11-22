@@ -42,6 +42,8 @@ In public copy say "AI-assisted development", not "vibe coding".
 - **Typography (decided 2026-11-21, pairing A):** Space Grotesk for headings, Inter for body text, JetBrains Mono for
   small labels and dates. All self-hosted via Fontsource variable packages (`@fontsource-variable/*`). Big Shoulders Display
   was tested and rejected; don't reintroduce other display faces without asking.
+  Exception (chosen by Jacob 2026-11-21): the homepage name uses **Unbounded** 800 (`@fontsource-variable/unbounded`,
+  imported only in `src/components/Hero.astro`).
 - **Signature element:** an interactive, realistic Vancouver skyline (see below).
 
 ## The cityscape hero (signature feature)
@@ -101,7 +103,7 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 - **SkyTrain (2026-11-21):** the Expo Line from the east edge through Main Street–Science World to the Dunsmuir tunnel
   portal past Stadium–Chinatown (`src/hero/skytrain.js`, centreline from OSM in the data file): elevated guideway,
   both stations, trains both ways that stop at each station. Heights approximate (deck ~9 m).
-- **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Space Grotesk 700, uppercase, an orange
+- **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange
   stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
   (`summary` prop in `src/pages/index.astro`), then the headline and subheading.
 - **Scroll (decided 2026-11-21):** one scroll is enough. The first scroll (or Tab / "Skip to work") swaps the headline
