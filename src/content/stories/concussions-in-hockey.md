@@ -1,6 +1,6 @@
 ---
-title: "Rangers rookie Rempe reignites the fighting safety debate"
-date: "2024-02-06"
+title: "Concussions in Hockey"
+# TODO(Jacob) date: removed 2026-11-22. The old date (2024-02-06) sat under a Rempe heading that did not match this audio, so it may belong to a different piece.
 section: "journalism"
 format: "audio"
 wixPage: "/shoplifting-surge"
