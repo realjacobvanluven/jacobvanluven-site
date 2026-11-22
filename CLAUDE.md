@@ -96,7 +96,8 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   window (Lighthouse mobile 99). Posters in `src/assets/hero/` are rendered with `scripts/skyline-lookdev.html`
   (`&w=…&h=…&dpr=…`); re-render them whenever the scene's look changes.
   Hover/tap highlights + labels; click flies the camera in, then routes.
-- **Scroll:** scrolling moves the camera through/along the city into the content.
+- **Scroll (decided 2026-11-21):** one scroll is enough. The first scroll (or Tab / "Skip to work") swaps the headline
+  for all four section cards at once; hovering or focusing a card turns the camera to its landmark. No multi-screen tour.
 - **Mobile:** device-tilt parallax (with the iOS permission prompt handled gracefully), tap hotspots,
   reduced geometry and capped devicePixelRatio. Must stay smooth on a mid-range phone.
 - **Always escapable:** a visible plain nav and a "skip to work" link. `prefers-reduced-motion` → static

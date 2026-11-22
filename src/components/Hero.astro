@@ -4,11 +4,11 @@
  *
  * Progressive enhancement:
  *  - Always: a pre-rendered poster (the LCP image) + the headline + "Skip to work". Works without JS.
- *  - With motion allowed: the hero becomes a scroll tour. Each scroll "stop" belongs to a landmark and its
- *    section (BC Place → Experience, etc.); a card for that section appears, and a rail shows the stops.
- *  - With JS + WebGL: the live 3D scene (src/hero/, loaded lazily) fades in over the poster and the camera
- *    eases from landmark to landmark as you scroll. The cursor (desktop) or device tilt (phones) adds a
- *    gentle look-around. Hotspot markers sit on the landmarks; following one flies the camera in.
+ *  - With motion allowed: one scroll (or Tab, or "Skip to work") swaps the headline for all four section
+ *    cards at once, each tied to a landmark (BC Place → Experience, etc.).
+ *  - With JS + WebGL: the live 3D scene (src/hero/, loaded lazily) fades in over the poster. Hovering or
+ *    focusing a card turns the camera to its landmark; the cursor (desktop) or device tilt (phones) adds a
+ *    gentle look-around. Hotspot markers sit on the landmarks; following one (or a card) flies the camera in.
  *  - Reduced motion / no JS / no WebGL: poster + headline, and the section cards below the hero (index.astro).
  */
 import { getImage } from 'astro:assets';
@@ -31,7 +31,7 @@ const fallback = await getImage({ src: posterDesktop, width: 1440, format: 'webp
 const stops = await heroStops();
 ---
 
-<section class="hero" data-hero aria-labelledby="hero-title" style={`--stops: ${stops.length}`}>
+<section class="hero" data-hero aria-labelledby="hero-title">
   <div class="stage" data-stage>
     <picture class="poster">
       <source media="(orientation: portrait)" type="image/webp" srcset={phoneSet} sizes="100vw" />
@@ -70,32 +70,22 @@ const stops = await heroStops();
       <a class="skip" href="#work">Skip to work <span aria-hidden="true">↓</span></a>
     </div>
 
-    {/* The tour: one card per stop, shown as you scroll. */}
+    {/* The sections: all four cards appear together after the first scroll. */}
     <ol class="cards" data-cards aria-label="Sections">
       {
         stops.map((s, i) => (
-          <li class="card" data-card={s.id} data-index={i + 1}>
-            <p class="place">{s.place}</p>
-            <h2>{s.label}</h2>
-            <p class="desc">{s.description}</p>
-            <a class="go" href={s.href} data-go={s.id}>
-              Open {s.label} <span aria-hidden="true">→</span>
+          <li class="card" style={`--i: ${i}`}>
+            <a href={s.href} data-go={s.id}>
+              <span class="place">{s.place}</span>
+              <span class="name">
+                {s.label} <span class="arrow" aria-hidden="true">→</span>
+              </span>
+              <span class="desc">{s.description}</span>
             </a>
           </li>
         ))
       }
     </ol>
-
-    <nav class="rail" aria-label="Skyline tour" data-rail>
-      <button type="button" data-stop="0" aria-label="Back to the start"><span class="rail-label" aria-hidden="true">Start</span></button>
-      {
-        stops.map((s, i) => (
-          <button type="button" data-stop={i + 1} aria-label={`Go to ${s.label}`}>
-            <span class="rail-label" aria-hidden="true">{s.label}</span>
-          </button>
-        ))
-      }
-    </nav>
 
     <button class="tilt" type="button" data-tilt hidden>Tilt to look around</button>
   </div>
@@ -108,9 +98,10 @@ const stops = await heroStops();
     min-height: 32rem;
   }
 
-  /* Room to scroll the tour: a screen per stop. Set before first paint (BaseLayout) so nothing shifts. */
+  /* A little room to scroll while the stage stays pinned: the first scroll reveals the cards. Set before
+     first paint (BaseLayout) so nothing shifts. */
   :global(html.hero-motion) .hero {
-    height: calc(100svh + var(--stops) * 85svh);
+    height: 140svh;
   }
 
   .stage {
@@ -222,128 +213,99 @@ const stops = await heroStops();
     color: var(--accent);
   }
 
-  /* ---- Tour cards ---- */
+  /* ---- Section cards ---- */
   .cards {
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  /* Without the tour (reduced motion, or before the script runs) the cards stay out of the way;
+  /* Without the reveal (reduced motion, or before the script runs) the cards stay out of the way;
      the same sections are linked below the hero. */
   .card {
     display: none;
   }
 
-  :global(html.hero-motion) .card {
+  :global(html.hero-motion) .cards {
     position: absolute;
-    right: calc(var(--gutter) + 3rem);
-    top: 50%;
+    left: var(--gutter);
+    right: var(--gutter);
+    bottom: clamp(1.25rem, 5svh, 3rem);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    max-width: 72rem;
+    margin-inline: auto;
+    pointer-events: none;
+  }
+
+  :global(html.hero-motion) .card {
     display: block;
-    width: min(24rem, calc(100% - 2 * var(--gutter) - 3rem));
     max-width: none;
-    padding: 1.5rem 1.5rem 1.4rem;
+    opacity: 0;
+    transform: translateY(1.25rem);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+
+  .cards.shown .card {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition: opacity 0.45s ease calc(var(--i) * 70ms), transform 0.45s ease calc(var(--i) * 70ms);
+  }
+
+  .card a {
+    display: grid;
+    gap: 0.3rem;
+    align-content: start;
+    height: 100%;
+    padding: 1rem 1.1rem 1.1rem;
     border: 1px solid rgb(255 255 255 / 0.12);
     border-radius: 12px;
     background: rgb(8 9 14 / 0.72);
     backdrop-filter: blur(10px);
-    box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(calc(-50% + 1.5rem));
-    transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s linear 0.4s;
+    box-shadow: 0 16px 48px rgb(0 0 0 / 0.4);
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color 0.2s ease, background 0.2s ease;
   }
 
-  :global(html.hero-motion) .card.active {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(-50%);
-    transition: opacity 0.4s ease, transform 0.4s ease;
+  .card a:hover,
+  .card a:focus-visible,
+  .card a.active {
+    border-color: var(--accent);
+    background: rgb(14 12 12 / 0.82);
   }
 
   .card .place {
-    margin: 0;
     font: 500 0.75rem var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--accent-soft);
   }
 
-  .card h2 {
-    margin: 0.35rem 0 0.6rem;
-    font-size: clamp(1.75rem, 3.4vw, 2.4rem);
+  .card .name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+    line-height: 1.15;
+  }
+
+  .card .arrow {
+    color: var(--accent);
+    transition: transform 0.2s ease;
+    display: inline-block;
+  }
+
+  .card a:hover .arrow,
+  .card a:focus-visible .arrow {
+    transform: translateX(0.25rem);
   }
 
   .card .desc {
-    margin: 0 0 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
     color: var(--text-muted);
-  }
-
-  /* ---- Rail ---- */
-  .rail {
-    display: none;
-  }
-
-  :global(html.hero-motion) .rail {
-    position: absolute;
-    right: var(--gutter);
-    top: 50%;
-    transform: translateY(-50%);
-    display: grid;
-    gap: 0.25rem;
-  }
-
-  .rail button {
-    position: relative;
-    display: grid;
-    place-items: center;
-    width: 2.75rem;
-    height: 2.75rem;
-    padding: 0;
-    border: 0;
-    background: none;
-    cursor: pointer;
-  }
-
-  .rail button::before {
-    content: '';
-    width: 0.55rem;
-    height: 0.55rem;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 0.4);
-    transition: transform 0.25s ease, background 0.25s ease;
-  }
-
-  .rail button[aria-current='step']::before {
-    background: var(--accent);
-    transform: scale(1.6);
-  }
-
-  .rail-label {
-    position: absolute;
-    right: 2.6rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    background: rgb(8 8 10 / 0.8);
-    color: var(--text);
-    font: 500 0.75rem var(--font-mono);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-  }
-
-  .rail button:hover .rail-label,
-  .rail button:focus-visible .rail-label {
-    opacity: 1;
-  }
-
-  .rail button:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: -4px;
-    border-radius: 999px;
   }
 
   /* ---- Hotspot markers ---- */
@@ -458,26 +420,19 @@ const stops = await heroStops();
     display: none;
   }
 
-  /* Phones: cards sit over the calm water at the bottom; the rail is a slim column on the right. */
-  @media (max-width: 40rem), (orientation: portrait) {
-    :global(html.hero-motion) .card {
-      left: var(--gutter);
-      right: calc(var(--gutter) + 2.5rem);
-      top: auto;
-      bottom: clamp(1.5rem, 6svh, 3rem);
-      width: auto;
-      transform: translateY(1.5rem);
+  /* Phones and narrow screens: a 2 × 2 grid over the calm water at the bottom, names only. */
+  @media (max-width: 48rem), (orientation: portrait) {
+    :global(html.hero-motion) .cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.5rem;
+      bottom: clamp(1rem, 4svh, 2rem);
     }
 
-    :global(html.hero-motion) .card.active {
-      transform: none;
+    .card a {
+      padding: 0.75rem 0.85rem;
     }
 
-    :global(html.hero-motion) .rail {
-      right: calc(var(--gutter) * 0.25);
-    }
-
-    .rail-label {
+    .card .desc {
       display: none;
     }
   }
@@ -524,56 +479,59 @@ const stops = await heroStops();
     html.classList.remove('hero-motion');
   }
 
-  /** Tour position from scroll: 0 = start, 1…N = the stops. Drives cards, rail and (if loaded) the camera. */
+  /**
+   * The reveal: any scroll past the top (or Tab into the cards, or "Skip to work") swaps the headline for
+   * the four section cards. `focus` is the card being hovered or focused (its landmark id), if any.
+   */
   function setUpTour(root: HTMLElement) {
-    const cards = [...root.querySelectorAll<HTMLElement>('[data-card]')];
-    const rail = [...root.querySelectorAll<HTMLButtonElement>('[data-stop]')];
+    const list = root.querySelector<HTMLElement>('[data-cards]')!;
+    const links = [...root.querySelectorAll<HTMLAnchorElement>('[data-go]')];
     const copy = root.querySelector<HTMLElement>('[data-copy]')!;
-    const n = cards.length;
-    let active = -1;
+    const skip = root.querySelector<HTMLAnchorElement>('.skip')!;
+    const state = { revealed: false, focus: null as string | null };
+    let focusedInside = false;
 
-    const position = () => {
-      const r = root.getBoundingClientRect();
-      const range = Math.max(1, r.height - innerHeight);
-      return Math.min(1, Math.max(0, -r.top / range)) * n;
+    const highlight = (id: string | null) => {
+      state.focus = id;
+      links.forEach((a) => a.classList.toggle('active', a.dataset.go === id));
+      root.querySelectorAll('[data-hotspot]').forEach((h) => h.classList.toggle('active', h.getAttribute('data-hotspot') === id));
     };
-
     const update = () => {
-      const p = position();
-      const nearest = Math.round(p);
-      const settled = Math.abs(p - nearest) < 0.32;
-      const now = settled ? nearest : -1;
-      if (now !== active) {
-        active = now;
-        cards.forEach((c, i) => c.classList.toggle('active', i + 1 === active));
-        copy.classList.toggle('away', p > 0.3);
-        root.querySelectorAll('[data-hotspot]').forEach((a) => a.classList.toggle('active', active > 0 && a.getAttribute('data-hotspot') === cards[active - 1]?.dataset.card));
-      } else {
-        copy.classList.toggle('away', p > 0.3);
-      }
-      rail.forEach((b, i) => (i === nearest ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current')));
+      const revealed = focusedInside || -root.getBoundingClientRect().top > 24;
+      if (revealed === state.revealed) return;
+      state.revealed = revealed;
+      list.classList.toggle('shown', revealed);
+      copy.classList.toggle('away', revealed);
+      if (!revealed) highlight(null);
     };
 
-    rail.forEach((b) =>
-      b.addEventListener('click', () => {
-        const k = Number(b.dataset.stop);
-        const top = root.getBoundingClientRect().top + scrollY;
-        const range = root.offsetHeight - innerHeight;
-        window.scrollTo({ top: top + (range * k) / n, behavior: 'smooth' });
-      }),
-    );
-    // Keyboard: tabbing to a card's link brings its stop into view.
-    cards.forEach((c, i) =>
-      c.querySelector('a')!.addEventListener('focus', () => {
-        if (Math.round(position()) === i + 1) return;
-        const top = root.getBoundingClientRect().top + scrollY;
-        window.scrollTo({ top: top + ((root.offsetHeight - innerHeight) * (i + 1)) / n });
-      }),
-    );
+    for (const a of links) {
+      a.addEventListener('pointerenter', () => highlight(a.dataset.go!));
+      a.addEventListener('pointerleave', () => highlight(null));
+      a.addEventListener('focus', () => highlight(a.dataset.go!));
+      a.addEventListener('blur', () => highlight(null));
+    }
+    // Hovering a marker lights up its card too.
+    root.querySelectorAll<HTMLElement>('[data-hotspot]').forEach((h) => {
+      h.addEventListener('pointerenter', () => highlight(h.dataset.hotspot!));
+      h.addEventListener('pointerleave', () => highlight(null));
+    });
+    // Keyboard: tabbing into the cards reveals them even at the top of the page.
+    list.addEventListener('focusin', () => { focusedInside = true; update(); });
+    list.addEventListener('focusout', (e) => {
+      if (list.contains(e.relatedTarget as Node)) return;
+      focusedInside = false;
+      update();
+    });
+    // "Skip to work" reveals the cards in place (one short scroll) instead of jumping past the hero.
+    skip.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.scrollTo({ top: root.getBoundingClientRect().top + scrollY + innerHeight * 0.2, behavior: 'smooth' });
+      links[0]?.focus({ preventScroll: true });
+    });
     window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
     update();
-    return { position, n, ids: cards.map((c) => c.dataset.card!) };
+    return { state, ids: links.map((a) => a.dataset.go!) };
   }
 
   async function start(root: HTMLElement, tour: ReturnType<typeof setUpTour>) {
@@ -616,8 +574,10 @@ const stops = await heroStops();
     type View = { bearing: number; pitch: number; fov: number };
     let flight: { from: View; to: View; t0: number; href: string } | null = null;
     let current: View | null = null;
+    let base: View | null = null;
+    let lastNow = 0;
+    const portraitNow = () => innerWidth < innerHeight;
     const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-    const smooth = (t: number) => t * t * (3 - 2 * t);
     const angleLerp = (a: number, b: number, t: number) => a + ((((b - a) % 360) + 540) % 360 - 180) * t;
     const FLIGHT_MS = 1100;
 
@@ -630,32 +590,25 @@ const stops = await heroStops();
         dataUrl: '/data/skyline.json',
         onFrame(hero, now) {
           const f = hero.framing;
-          const portrait = innerWidth < innerHeight;
-          // Camera view for each tour stop: the landmark slightly left of centre on desktop (the card is on
-          // the right), centred on phones (the card is below), with a slightly tighter lens.
-          const hfov = 2 * Math.atan(Math.tan((f.fov * Math.PI) / 360) * (innerWidth / innerHeight)) * (180 / Math.PI);
-          const views: View[] = [{ bearing: f.bearing, pitch: f.pitch, fov: f.fov }];
-          for (const id of tour.ids) {
-            const v = hero.viewOf(id);
-            if (!v) { views.push(views[views.length - 1]); continue; }
-            views.push({
-              bearing: v.bearing + (portrait ? 0 : hfov * 0.14),
-              pitch: f.pitch + Math.max(-2, Math.min(3, v.pitch)) * 0.5,
-              fov: f.fov * 0.85,
-            });
-          }
-          // Ease between stops, holding still around each one.
-          const p = tour.position();
-          const i = Math.min(views.length - 2, Math.floor(p));
-          const u = smooth(Math.min(1, Math.max(0, (p - i - 0.25) / 0.5)));
-          const a = views[i], b = views[i + 1];
+          // Target view: the opening shot; once the cards are up, a touch lower so the skyline sits above
+          // them; with a card hovered/focused, turned toward its landmark with a slightly tighter lens.
+          let target: View = { bearing: f.bearing, pitch: f.pitch, fov: f.fov };
+          if (tour.state.revealed) target = { bearing: f.bearing, pitch: f.pitch - (portraitNow() ? 2.5 : 1.8), fov: f.fov };
+          const v = tour.state.focus ? hero.viewOf(tour.state.focus) : null;
+          if (v) target = { bearing: v.bearing, pitch: target.pitch + Math.max(-2, Math.min(3, v.pitch)) * 0.5, fov: f.fov * 0.82 };
+          // Ease toward it (frame-rate independent).
+          const dt = Math.min(0.1, (now - (lastNow || now)) / 1000);
+          lastNow = now;
+          const k = 1 - Math.exp(-dt / 0.45);
+          base = base ? {
+            bearing: angleLerp(base.bearing, target.bearing, k),
+            pitch: base.pitch + (target.pitch - base.pitch) * k,
+            fov: base.fov + (target.fov - base.fov) * k,
+          } : target;
+          if (Math.abs(angleLerp(base.bearing, target.bearing, 1) - base.bearing) + Math.abs(base.pitch - target.pitch) > 0.05) ctl?.poke();
           look.yaw += (look.targetYaw - look.yaw) * 0.08;
           look.pitch += (look.targetPitch - look.pitch) * 0.08;
-          let view: View = {
-            bearing: angleLerp(a.bearing, b.bearing, u) + look.yaw,
-            pitch: a.pitch + (b.pitch - a.pitch) * u + look.pitch,
-            fov: a.fov + (b.fov - a.fov) * u,
-          };
+          let view: View = { bearing: base.bearing + look.yaw, pitch: base.pitch + look.pitch, fov: base.fov };
           if (flight) {
             const t = Math.min(1, (now - flight.t0) / FLIGHT_MS);
             const k = ease(t);
