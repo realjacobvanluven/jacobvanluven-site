@@ -119,6 +119,30 @@ export function createAquabus({ from, to, speed = 4.5, dwell = 6, phase = 0 }, e
   masthead.position.set(1.5, 3.4, 0);
   group.add(hull, bow, cabin, roof, masthead);
 
+  // Wake: a faint V of churned water behind the stern, shown while the boat is moving.
+  const wakeMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { uStrength: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uStrength; uniform float uTime; varying vec2 vUv;
+      void main() {
+        float behind = 1.0 - vUv.x;                       // 0 at the stern, 1 at the far end
+        float side = abs(vUv.y - 0.5) * 2.0;              // 0 centre line, 1 edges
+        float arms = exp(-pow((side - behind * 0.85) * 7.0, 2.0));
+        float trail = exp(-pow(side * 4.0, 2.0)) * (1.0 - behind) * 0.7;
+        float foam = (arms + trail) * (1.0 - behind) * (0.7 + 0.3 * sin(vUv.x * 60.0 - uTime * 5.0));
+        gl_FragColor = vec4(vec3(0.5, 0.56, 0.62) * foam * 0.22 * uStrength, 1.0);
+      }
+    `,
+  });
+  const wake = new THREE.Mesh(new THREE.PlaneGeometry(44, 18), wakeMat);
+  wake.rotation.x = -Math.PI / 2;
+  wake.position.set(-L / 2 - 22, 0.06, 0);
+  group.add(wake);
+
   const dx = to.x - from.x, dy = to.y - from.y;
   const D = Math.hypot(dx, dy);
   const travel = D / speed;
@@ -138,6 +162,11 @@ export function createAquabus({ from, to, speed = 4.5, dwell = 6, phase = 0 }, e
     const heading = Math.atan2(outbound ? dy : -dy, outbound ? dx : -dx);
     group.rotation.set(0, heading, Math.sin(time * 1.3 + phase) * 0.015);
     group.position.y = Math.sin(time * 1.7 + phase) * 0.08;
+    // Wake strength follows speed (zero while docked).
+    const trip = u > dwell && u < dwell + travel ? (u - dwell) / travel : u > 2 * dwell + travel ? (u - 2 * dwell - travel) / travel : -1;
+    const ramp = (t) => Math.min(1, Math.max(0, t));
+    wakeMat.uniforms.uStrength.value = trip < 0 ? 0 : ramp(trip / 0.15) * ramp((1 - trip) / 0.2);
+    wakeMat.uniforms.uTime.value = time;
   }
   update(0);
   return { group, update, lights: [] };

@@ -46,6 +46,8 @@ function orientedExtents(ring) {
  * Landmark parts (BC Place bowl, Harbour Centre tower, Science World dome) are removed here and
  * replaced by hand-built models; their placement comes from the removed parts.
  */
+export { orientedExtents, centroid };
+
 export async function loadSkyline(url) {
   const raw = await (await fetch(url)).json();
   const lm = raw.landmarks;
@@ -83,6 +85,8 @@ export async function loadSkyline(url) {
     bridge: raw.bridge?.map((p) => p.map((v) => v / 10)) ?? null,
     docks: (raw.docks ?? []).map((l) => decodeRing(l)),
     boats: (raw.boats ?? []).map(([x, y, a, len, kind]) => ({ x: x / 10, y: y / 10, heading: (a / 1800) * Math.PI, length: len / 10, sail: kind === 1 })),
+    signatures: (raw.signatures ?? []).map((sg) => ({ id: sg.id, height: sg.height, ring: decodeRing(sg.ring) })),
+    roads: (raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: decodeRing(line) })),
     raw,
   };
 }

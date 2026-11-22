@@ -65,6 +65,9 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   and use simpler detail for distant buildings.
 - **Data notes:** the City's 2015 footprints have no heights; heights and stepped podium/tower parts come from the
   2009 dataset, with OSM for newer towers (`scripts/build-skyline-data.mjs`, `npm run data:skyline`).
+  The City's 2022 LiDAR (for accurate current heights) is LAS zipped in 1 km tiles; its download server blocks
+  scripted requests (bot challenge, HTTP 403), so it needs tiles downloaded by hand in a browser (18 tiles cover the
+  scene). Not done yet. Signature towers are hand-modelled in `src/hero/signatures.js` (positions from OSM).
 - **Look (decided 2026-11-21): realistic, not stylized.** The scene must look like a real photograph of Vancouver, not
   orange-and-black blocks. Orange and black are the site's theme, carried by lighting and UI, never by painting
   buildings orange.

@@ -99,6 +99,12 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
 
         vec3 deep = vec3(0.003, 0.007, 0.013);
         vec3 col = deep + refl * mix(0.35, 0.85, fres);
+        // Glints: tiny shimmering highlights where ripples catch a bright reflection.
+        float lum = dot(refl, vec3(0.299, 0.587, 0.114));
+        vec2 gp = local * 2.2 + vec2(uTime * 0.7, -uTime * 0.45);
+        float g = hash12(floor(gp));
+        float glint = step(0.982, g) * smoothstep(0.06, 0.5, lum) * (0.5 + 0.5 * sin(uTime * 7.0 + g * 60.0));
+        col += refl * glint * 4.0 / (1.0 + dist * 0.0015);
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
     `,

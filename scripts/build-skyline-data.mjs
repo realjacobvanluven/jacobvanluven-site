@@ -220,6 +220,27 @@ function osm() {
 out tags geom;`);
 }
 
+/** Downtown streets (for streetlights and traffic). */
+function osmRoads() {
+  const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
+  return overpass('osm-roads.json', `[out:json][timeout:90];
+way["highway"~"^(trunk|primary|secondary|tertiary|residential|unclassified)$"](${b});
+out tags geom;`);
+}
+
+/**
+ * Signature towers, hand-modelled in the scene (src/hero/signatures.js). Located by OSM way id, or for
+ * Living Shangri-La (not named in OSM here) by its address coordinates. Heights are approximate.
+ */
+const SIGNATURES = [
+  { id: 'wallCentre', way: 91998089, height: 150 },
+  { id: 'paradox', way: 362187535, height: 188 },
+  { id: 'butterfly', way: 653660958, height: 177 },
+  { id: 'mnp', way: 361463297, height: 144 },
+  { id: 'vancouverHouse', way: 742009401, height: 150 },
+  { id: 'shangriLa', near: [49.2856, -123.1238], height: 197 },
+];
+
 /** Cambie Bridge roadway, marinas and their docks. */
 function osmExtras() {
   return overpass('osm-extras.json', `[out:json][timeout:60];
@@ -276,6 +297,7 @@ function osmRings(el) {
 // ---- Build ------------------------------------------------------------------------------------------
 const [fc2015, fc2009, osmData] = await Promise.all([cityFootprints(2015), cityFootprints(2009), osm()]);
 const extras = await osmExtras();
+const roadsData = await osmRoads();
 
 const f15 = cityRings(fc2015, false);
 const p09 = cityRings(fc2009, true).filter((p) => p.h);
@@ -395,6 +417,34 @@ const shoreLines = coastline
 const shore = shoreLines.map(encodeRing);
 
 // ---- Extras -----------------------------------------------------------------------------------------
+// Signature towers: footprint ring (local metres) + height; the scene removes the data buildings inside.
+const signatures = [];
+for (const sig of SIGNATURES) {
+  let ring = null;
+  if (sig.way) {
+    const el = osmData.elements.find((e) => e.type === 'way' && e.id === sig.way);
+    if (el?.geometry) ring = cleanRing(el.geometry.map((p) => toLocal([p.lon, p.lat])));
+  } else if (sig.near) {
+    // Tallest kept building part within 60 m of the address.
+    const [nx, ny] = toLocal([sig.near[1], sig.near[0]]);
+    const cand = kept.filter((o) => Math.hypot(...centroid(o.ring).map((v, i) => v - [nx, ny][i])) < 60).sort((a, b) => b.h - a.h)[0];
+    if (cand) ring = cand.ring;
+  }
+  if (!ring) { console.warn(`Signature tower not found: ${sig.id}`); continue; }
+  signatures.push({ id: sig.id, height: sig.height, ring: encodeRing(ring) });
+}
+
+// Streets inside the view, simplified; class 0 = main road (traffic), 1 = local street.
+const ROAD_CLASS = { trunk: 0, primary: 0, secondary: 0, tertiary: 1, residential: 1, unclassified: 1 };
+const roads = [];
+for (const e of roadsData.elements) {
+  if (e.type !== 'way' || !e.geometry || e.tags?.bridge === 'yes' || e.tags?.tunnel === 'yes') continue;
+  const line = simplify(e.geometry.map((p) => toLocal([p.lon, p.lat])), 2);
+  const inside = line.filter((p) => inView(p) && Math.hypot(...p) < 2900);
+  if (inside.length < 2) continue;
+  roads.push([ROAD_CLASS[e.tags.highway] ?? 1, ...encodeRing(inside)]);
+}
+
 const mask = buildWaterMask(shoreLines, MASK);
 
 const terrain = await sampleTerrain(TERRAIN, toLonLat, cachedBinary, USER_AGENT);
@@ -475,6 +525,9 @@ const data = {
   docks: docks.map(encodeRing),
   // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
   boats,
+  signatures,
+  // [class, ...line] (class 0 main road, 1 local street)
+  roads,
 };
 
 await mkdir(dirname(OUT), { recursive: true });
@@ -489,5 +542,6 @@ console.log('Tallest:', kept.sort((a, b) => b.h - a.h).slice(0, 8).map((o) => `$
 console.log('Landmarks:', Object.keys(landmarkOut).join(', '));
 const part = (k) => `${k} ${(gzipSync(JSON.stringify(data[k])).length / 1024).toFixed(0)} KB`;
 console.log('Extras:', `mask ${mask.width}×${mask.height},`, `terrain ${terrain.cols}×${terrain.rows} (max ${terrain.max} m, ${terrain.tiles} tiles),`, `bridge ${bridge ? 'yes' : 'no'},`, `${docks.length} docks, ${boats.length} boats`);
-console.log('Gzipped parts:', ['buildings', 'waterMask', 'terrain', 'shoreline', 'docks', 'boats'].map(part).join(', '));
+console.log('Gzipped parts:', ['buildings', 'waterMask', 'terrain', 'shoreline', 'docks', 'boats', 'signatures', 'roads'].map(part).join(', '));
+console.log('Signatures:', signatures.map((s) => s.id).join(', '), '| roads:', roads.length);
 console.log(`Wrote ${OUT}: ${(json.length / 1024).toFixed(0)} KB, ${(gzipSync(json).length / 1024).toFixed(0)} KB gzipped`);

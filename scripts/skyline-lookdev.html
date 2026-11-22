@@ -40,7 +40,7 @@ canvas.style.height = height + 'px';
 try {
   if (params.get('live')) {
     const tiers = [];
-    const { hero, stop } = await startHero({ canvas, layout, dataUrl: '/public/data/skyline.json', onTierChange: (t, fps) => tiers.push({ tier: t, fps: +fps.toFixed(1) }) });
+    const { hero, stop } = await startHero({ canvas, layout, dataUrl: '/public/data/skyline.json?v=' + Date.now(), onTierChange: (t, fps) => tiers.push({ tier: t, fps: +fps.toFixed(1) }) });
     // &slow=ms simulates a slow device (busy-wait per frame) to exercise the tier drop.
     const slow = +(params.get('slow') ?? 0);
     if (slow) { const r = hero.render; hero.render = (t) => { const e = performance.now() + slow; while (performance.now() < e); r(t); }; }
@@ -49,7 +49,7 @@ try {
     window.__result = { png: canvas.toDataURL('image/png'), tiers, stats: hero.stats, log: window.__log };
   } else {
     const s = await createSkylineScene({
-      canvas, width, height, layout, dataUrl: '/public/data/skyline.json',
+      canvas, width, height, layout, dataUrl: '/public/data/skyline.json?v=' + Date.now(),
       terrain: params.get('terrain') ?? 'dem',
       // Stills: desktop at 1600×900 exactly; phone at its starting tier (1.5× density).
       maxPixelRatio: dprOverride ?? (layout === 'phone' ? 1.5 : 1),
@@ -57,6 +57,11 @@ try {
       preserveDrawingBuffer: true,
       tier: params.get('tier') ?? (layout === 'phone' ? 'medium' : 'high'),
     });
+    // &highlight=signatures paints the hand-built towers flat orange (visibility check).
+    if (params.get('highlight') === 'signatures') {
+      const THREE = await import('three');
+      s.scene.traverse((o) => { if (o.userData.signatures) o.material = new THREE.MeshBasicMaterial({ color: 0xff6a00 }); });
+    }
     if (params.get('bearing')) s.aim(+params.get('bearing'), +(params.get('pitch') ?? 0)); // comparison views
     s.render(+(params.get('time') ?? 3)); // &time=seconds: animation time for the still
     const png = s.renderer.domElement.toDataURL('image/png');

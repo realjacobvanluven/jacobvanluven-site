@@ -34,12 +34,47 @@ vec3 skyColor(vec3 d) {
   c += vec3(1.00, 0.50, 0.12) * pow(toward, 5.0) * exp(-h * 16.0) * 0.8;
   c += vec3(1.00, 0.60, 0.22) * pow(toward, 3.0) * exp(-h * 12.0) * 0.06;
 
+  // Light pollution: a faint warm dome low over downtown (north-west of the camera).
+  vec2 cityDir = normalize(vec2(-0.5, -0.87)); // world xz toward bearing ~330°
+  float towardCity = clamp(dot(dh, cityDir), 0.0, 1.0);
+  c += vec3(1.0, 0.58, 0.3) * pow(towardCity, 2.0) * exp(-h * 22.0) * 0.06;
+
   if (y < 0.0) {
     // Below the horizon (only seen in reflections and haze): darker, still tinted by the glow.
     c = mix(horizon * 0.55, vec3(0.012, 0.016, 0.03), smoothstep(0.0, 0.25, -y))
       + vec3(1.0, 0.38, 0.10) * pow(toward, 7.0) * 0.25 * exp(y * 18.0);
   }
   return c;
+}
+
+// Thin cloud layer (sky dome only, so other shaders don't pay for it): value-noise fbm on a plane ~2.5 km
+// up, drifting slowly; undersides lit by the city glow and the western afterglow.
+float cloudNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+  float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+  float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+  float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+vec3 skyWithClouds(vec3 d, float time) {
+  vec3 base = skyColor(d);
+  if (d.y < 0.02) return base;
+  vec2 p = d.xz / d.y * 2.5 + vec2(time * 0.004, time * 0.0015); // in km on the cloud plane
+  float n = 0.0, amp = 0.5;
+  vec2 q = p * 0.55;
+  for (int o = 0; o < 4; o++) { n += cloudNoise(q) * amp; q *= 2.07; amp *= 0.5; }
+  float cover = smoothstep(0.5, 0.78, n);
+  // Fade into the haze toward the horizon.
+  cover *= smoothstep(0.02, 0.12, d.y) * 0.75;
+  vec2 dh = normalize(d.xz + 1e-6);
+  float west = pow(clamp(dot(dh, normalize(uSunDir.xz)) * 0.5 + 0.5, 0.0, 1.0), 4.0);
+  float city = pow(clamp(dot(dh, normalize(vec2(-0.5, -0.87))), 0.0, 1.0), 1.5);
+  vec3 cloudCol = vec3(0.012, 0.016, 0.035)               // unlit body
+    + vec3(1.0, 0.45, 0.15) * west * 0.10 * exp(-d.y * 4.0) // afterglow on the western clouds
+    + vec3(1.0, 0.6, 0.32) * city * 0.035;                 // city light on the undersides
+  return mix(base, cloudCol, cover);
 }
 
 // Haze colour: the horizon sky in the direction of view.

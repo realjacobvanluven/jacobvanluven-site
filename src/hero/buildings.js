@@ -76,9 +76,18 @@ export function createFacadeMaterial(uniforms) {
         vec3 sunFlat = normalize(vec3(uSunDir.x, 0.0, uSunDir.z));
         vec3 westWarm = vec3(1.0, 0.5, 0.2);
 
+        // Contact shadow: walls darken toward the ground, where sky light is blocked by the street canyon.
+        float ao = mix(0.45, 1.0, smoothstep(0.0, 7.0, vWorld.y));
+
         if (n.y > 0.5) {
           vec3 roof = vec3(0.016, 0.018, 0.024) * (0.7 + 0.6 * hash12(vec2(vSeed * 91.0, 3.0)));
           gl_FragColor = vec4(applyFog(roof, vWorld), 1.0);
+          return;
+        }
+        // Rooftop equipment: plain walls, no windows.
+        if (vKind > 2.5) {
+          vec3 plant = vec3(0.05, 0.052, 0.058) * (0.6 + 0.4 * n.y) * vec3(0.6, 0.66, 0.85);
+          gl_FragColor = vec4(applyFog(plant, vWorld), 1.0);
           return;
         }
 
@@ -151,6 +160,9 @@ export function createFacadeMaterial(uniforms) {
 
         vec3 frameCol = mix(wallLit, vec3(0.018, 0.02, 0.025), 1.0 - isConcrete);
         frameCol = mix(frameCol, vec3(0.012, 0.013, 0.016), isOffice); // spandrels
+        frameCol *= ao;
+        glassCol *= ao;
+        slabCol *= ao;
         vec3 windowCol = glassCol * (1.0 - lit * 0.85) + lampEmit;
         vec3 near = mix(frameCol, windowCol, isWindow);
         near = mix(near, slabCol, slab);

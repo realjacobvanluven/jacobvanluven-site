@@ -6,7 +6,8 @@
  * Out: { chunks: [{ position, normal, seed, kind, top }], stats }  (typed arrays, transferred)
  *
  * Facade kinds: 0 concrete (punched windows), 1 residential glass (balcony bands), 2 office curtain wall.
- * Taller towers get some variety on top: stepped (setback) crowns or angled roofs.
+ * Taller towers get some variety on top: stepped (setback) crowns or angled roofs. Larger flat roofs get a
+ * few mechanical boxes (kind 3: plain walls, no windows).
  */
 
 const CHUNK = 400;
@@ -83,6 +84,14 @@ function pushPrism(ch, ring, base, topAt, roofTop, seed, kind) {
   }
 }
 
+function insideRing([x, y], r) {
+  let hit = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    if (r[i][1] > y !== r[j][1] > y && x < ((r[j][0] - r[i][0]) * (y - r[i][1])) / (r[j][1] - r[i][1]) + r[i][0]) hit = !hit;
+  }
+  return hit;
+}
+
 function build({ buildings, camera, lod }) {
   const { farDistance = 1300, farMinHeight = 10 } = lod ?? {};
   const random = rng(20241121);
@@ -120,6 +129,21 @@ function build({ buildings, camera, lod }) {
       stats.angled++;
     } else {
       pushPrism(ch, b.ring, b.base, () => b.h, b.h, seed, kind);
+      // Rooftop equipment on bigger flat roofs.
+      const area = Math.abs(signedArea(b.ring));
+      if (b.h > 15 && area > 250) {
+        const xs = b.ring.map((p) => p[0]), ys = b.ring.map((p) => p[1]);
+        const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...ys) - Math.min(...ys);
+        const n = 1 + Math.floor(r3 * 3);
+        for (let k = 0; k < n; k++) {
+          const ox = b.c[0] + (random() - 0.5) * w * 0.5, oy = b.c[1] + (random() - 0.5) * d * 0.5;
+          const bw = 2.5 + random() * 5, bd = 2.5 + random() * 5, bh = 1.8 + random() * 2.6;
+          if (!insideRing([ox, oy], b.ring)) continue;
+          const box = [[ox - bw / 2, oy - bd / 2], [ox + bw / 2, oy - bd / 2], [ox + bw / 2, oy + bd / 2], [ox - bw / 2, oy + bd / 2]];
+          pushPrism(ch, box, b.h, () => b.h + bh, b.h + bh, seed, 3);
+          stats.rooftop = (stats.rooftop ?? 0) + 1;
+        }
+      }
     }
   }
 

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { loadSkyline } from './skyline-data.js';
 import { skyGlsl, sunDirection } from './shaders.js';
-import { createBuildings } from './buildings.js';
+import { createBuildings, createFacadeMaterial } from './buildings.js';
+import { createSignatures } from './signatures.js';
+import { createStreets } from './streets.js';
 import { createWater, createGround } from './water.js';
 import { createMountains, northShoreLightPoints, demHeightAt, terrainHeight } from './mountains.js';
 import { createLightPoints, aviationLights, distantLights } from './lights.js';
@@ -43,9 +45,17 @@ export const framingFor = (aspect) => (aspect < 1 ? FRAMING.phone : FRAMING.desk
 export const TURN_BEARING = { desktop: 38, phone: 56 };
 
 const SCENE_DETAIL = {
-  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400 },
-  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600 },
+  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48] },
+  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70] },
 };
+
+function insideRing([x, y], r) {
+  let hit = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    if (r[i][1] > y !== r[j][1] > y && x < ((r[j][0] - r[i][0]) * (y - r[i][1])) / (r[j][1] - r[i][1]) + r[i][0]) hit = !hit;
+  }
+  return hit;
+}
 
 function createSky(uniforms) {
   const g = new THREE.SphereGeometry(30000, 48, 24);
@@ -60,7 +70,8 @@ function createSky(uniforms) {
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       varying vec3 vDir;
-      void main() { gl_FragColor = vec4(skyColor(normalize(vDir)), 1.0); }
+      uniform float uTime;
+      void main() { gl_FragColor = vec4(skyWithClouds(normalize(vDir), uTime), 1.0); }
     `,
   });
   const sky = new THREE.Mesh(g, m);
@@ -146,8 +157,14 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   // low blocks between the camera and BC Place that hide its base.
   const bcBearing = L.bcPlace ? bearingTo(L.bcPlace.center) : 0;
   const bcDistance = L.bcPlace ? distanceTo(L.bcPlace.center) : 0;
-  const culled = { southShore: 0, frontOfBcPlace: 0 };
+  const culled = { southShore: 0, frontOfBcPlace: 0, signatures: 0 };
+  // Signature towers replace the data buildings inside their (slightly enlarged) footprints.
+  const sigRings = data.signatures.map((sg) => {
+    const cx = sg.ring.reduce((t, p) => t + p[0], 0) / sg.ring.length, cy = sg.ring.reduce((t, p) => t + p[1], 0) / sg.ring.length;
+    return sg.ring.map(([x, y]) => [cx + (x - cx) * 1.2, cy + (y - cy) * 1.2]);
+  });
   const buildingList = data.buildings.filter((b) => {
+    if (sigRings.some((r) => insideRing(b.c, r))) { culled.signatures++; return false; }
     const d = distanceTo(b.c);
     if (d < 700 && b.c[1] < 150) {
       let crossesWater = false;
@@ -168,11 +185,15 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const { group: buildings, stats } = await createBuildings(buildingList, uniforms, { camera: CAMERA_POSITION, lod: detail.lod });
   scene.add(buildings);
   timings.buildingsWorker = performance.now() - t;
+  const signatures = createSignatures(data.signatures, createFacadeMaterial(uniforms));
+  signatures.mesh.userData.signatures = true;
+  scene.add(signatures.mesh);
 
   await breathe();
   t = performance.now();
   const lights = []; // { p, color, size, priority } — lower priority are dropped first on low tiers
   const addLights = (list, priority) => list.forEach((l) => lights.push({ ...l, priority }));
+  addLights(signatures.crownLights, 0);
 
   if (L.bcPlace) {
     const bc = bcPlace(L.bcPlace, envMap);
@@ -213,6 +234,16 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
 
   let bridgeStats = null;
   const animators = []; // (time) => void, run before every frame
+
+  // Street life: lamps along the downtown streets, traffic on the main roads.
+  const streets = createStreets(data.roads, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing });
+  addLights(streets.lamps, 2);
+  if (streets.carLights.length) {
+    const streetTraffic = createLightPoints(streets.carLights, uniforms);
+    scene.add(streetTraffic);
+    const sp = streetTraffic.geometry.attributes.position;
+    animators.push((time) => { streets.updateTraffic(sp.array, time); sp.needsUpdate = true; });
+  }
   if (data.bridge) {
     const br = createBridge(data.bridge, { isWater, envMap });
     scene.add(br.group);
@@ -345,7 +376,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, streets: streets.stats, signatures: data.signatures.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {
