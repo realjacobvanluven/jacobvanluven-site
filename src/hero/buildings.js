@@ -201,8 +201,19 @@ export function createFacadeMaterial(uniforms) {
         vec3 warm = vec3(1.0, 0.58, 0.26);
         vec3 neutral = vec3(1.0, 0.78, 0.55);
         vec3 cool = vec3(0.76, 0.86, 1.0);
-        vec3 lampCol = r3 < 0.55 ? warm : (r3 < 0.85 ? neutral : cool);
-        lampCol = mix(lampCol, mix(neutral, cool, 0.5), isOffice);
+        // Each building has a lighting style (some warmer, some cooler), and homes vary from 2700 K
+        // tungsten to 5000 K daylight LED; offices are a building-wide 4000 K or 5000 K.
+        float style = hash12(vec2(vSeed * 61.0, 8.0));
+        vec3 k2700 = vec3(1.0, 0.52, 0.22), k3000 = vec3(1.0, 0.64, 0.34), k4000 = vec3(1.0, 0.82, 0.62), k5000 = vec3(0.8, 0.88, 1.0);
+        float rk = clamp(r3 * 0.8 + style * 0.45 - 0.15, 0.0, 1.0);
+        vec3 lampCol = rk < 0.3 ? k2700 : rk < 0.58 ? k3000 : rk < 0.82 ? k4000 : k5000;
+        vec3 officeCol = style < 0.4 ? mix(k4000, k5000, 0.3) : style < 0.85 ? mix(k4000, k5000, 0.75) : vec3(0.72, 0.9, 0.95);
+        lampCol = mix(lampCol, officeCol, isOffice);
+        // A few homes with coloured LED strips or grow lights.
+        float rgb = step(0.98, hash12(unit * 5.3 + vSeed * 17.0)) * (1.0 - isOffice);
+        float hue = hash12(unit * 9.1 + vSeed * 5.0);
+        vec3 accentRoom = hue < 0.3 ? vec3(0.62, 0.32, 1.0) : hue < 0.5 ? vec3(1.0, 0.3, 0.62) : hue < 0.7 ? vec3(0.25, 0.85, 0.9) : hue < 0.85 ? vec3(1.0, 0.28, 0.2) : vec3(0.45, 1.0, 0.45);
+        lampCol = mix(lampCol, accentRoom, rgb);
         float bright = mix(0.3, 1.2, r2 * r2) * mix(1.0, 0.55, isOffice);
         // Office floors are one room: every panel on a floor shares the light level.
         bright = mix(bright, mix(0.45, 0.7, floorRand), isOffice);
@@ -215,6 +226,11 @@ export function createFacadeMaterial(uniforms) {
         lampCol = mix(lampCol, vec3(0.55, 0.7, 1.0), tv);
         bright = mix(bright, bright * flick, tv);
         lampCol = mix(lampCol, warm, ground * 0.6);
+        // Shopfronts: some carry a coloured sign or neon.
+        float shop = ground * step(0.7, hash12(unit * 2.9 + vSeed * 13.0));
+        float signHue = hash12(unit * 4.7 + vSeed);
+        vec3 signCol = signHue < 0.3 ? vec3(1.0, 0.2, 0.15) : signHue < 0.5 ? vec3(0.3, 0.55, 1.0) : signHue < 0.7 ? vec3(1.0, 0.45, 0.85) : signHue < 0.85 ? vec3(0.35, 1.0, 0.6) : vec3(1.0, 0.85, 0.3);
+        lampCol = mix(lampCol, signCol, shop * 0.7);
         float emitK = uWindowIntensity * lit * (1.0 + ground * 0.15);
         // Flat (distant) version of a lit window: ceiling lights make the top a little brighter.
         vec3 flatRoom = lampCol * mix(0.75, 1.1, f.y);
@@ -248,15 +264,23 @@ export function createFacadeMaterial(uniforms) {
         vec3 R = reflect(-V, np);
         R.y = abs(R.y) * 0.9 + 0.02;
         float fres = 0.04 + 0.96 * pow(1.0 - max(dot(np, V), 0.0), 5.0);
-        vec3 tint = mix(vec3(0.008, 0.014, 0.02), vec3(0.008, 0.018, 0.017), hash12(vec2(vSeed * 3.0, 9.0)));
-        vec3 glassCol = tint + skyColor(R) * mix(0.25, 0.9, fres);
+        // Glass type per building: Vancouver's green-teal condo glass, blue, bronze, silver or dark smoked.
+        float gk = hash12(vec2(vSeed * 23.0, 4.0));
+        vec3 glassTint = gk < 0.32 ? vec3(0.42, 0.98, 0.85) : gk < 0.52 ? vec3(0.42, 0.7, 1.15) : gk < 0.66 ? vec3(1.15, 0.75, 0.45) : gk < 0.86 ? vec3(0.88, 0.9, 0.94) : vec3(0.5, 0.52, 0.56);
+        vec3 tint = vec3(0.009, 0.014, 0.018) * glassTint * 1.3;
+        vec3 glassCol = tint + skyColor(R) * mix(0.25, 0.9, fres) * glassTint;
         // The city reflected in the glass: a faint band of distant lit windows near the horizon.
         float az = atan(R.x, R.z);
         float cityBand = (1.0 - smoothstep(0.0, 0.12, R.y)) * step(0.9, hash12(floor(vec2(az * 420.0, R.y * 900.0))));
         glassCol += vec3(1.0, 0.7, 0.4) * cityBand * 0.14 * detail * mix(0.4, 1.0, fres);
 
-        vec3 frameCol = mix(wallLit, vec3(0.018, 0.02, 0.025), 1.0 - isConcrete);
-        frameCol = mix(frameCol, vec3(0.012, 0.013, 0.016), isOffice); // spandrels
+        // Mullions/slab edges per building: white, black, bronze or grey metal; office spandrels take the
+        // glass colour.
+        float mk = hash12(vec2(vSeed * 37.0, 6.0));
+        vec3 metal = mk < 0.3 ? vec3(0.07, 0.072, 0.078) : mk < 0.55 ? vec3(0.012, 0.013, 0.015) : mk < 0.72 ? vec3(0.04, 0.028, 0.017) : vec3(0.03, 0.032, 0.036);
+        metal *= skyAmb * vec3(0.75, 0.8, 0.95);
+        vec3 frameCol = mix(wallLit, metal, 1.0 - isConcrete);
+        frameCol = mix(frameCol, vec3(0.011) * glassTint * 1.2 + metal * 0.3, isOffice); // spandrels
         frameCol += vec3(0.02, 0.016, 0.012) * washCol * (1.0 - isConcrete);
         // Parapet cap and corner trim: a little lighter (metal / precast), catching the sky.
         frameCol = mix(frameCol, wallLit * 1.15 + vec3(0.004, 0.005, 0.008), max(parapet, corner * (1.0 - isConcrete)) * (1.0 - isConcrete * 0.6));
@@ -267,7 +291,7 @@ export function createFacadeMaterial(uniforms) {
 
         // Far away: average instead of aliasing.
         float avgLit = mix(litShare, 0.27, isOffice);
-        vec3 avgLamp = mix(mix(warm, neutral, 0.4), cool, isOffice * 0.7) * 0.62 * uWindowIntensity * avgLit;
+        vec3 avgLamp = mix(mix(k3000, k4000, style), officeCol, isOffice) * 0.62 * uWindowIntensity * avgLit;
         // Distant facades read as dark walls with a glow of windows, not pale blocks: darken the wall part.
         vec3 far = mix(frameCol * 0.55, glassCol * (1.0 - avgLit * 0.85) + avgLamp, windowArea);
         far = mix(far, slabCol * 0.6, isResi * 0.16);
@@ -316,6 +340,15 @@ export function createFacadeMaterial(uniforms) {
           near = mix(near, slabCol, slab);
           col = mix(near, far, farMix);
         }
+
+        // Feature lighting on some towers: a coloured LED band at the crown washing down the top floors
+        // (white, blue, purple, teal or amber), visible across the city.
+        float crownOn = step(55.0, vTop) * step(hash12(vec2(vSeed * 71.0, 2.0)), 0.2);
+        float ch = hash12(vec2(vSeed * 83.0, 1.0));
+        vec3 crownCol = ch < 0.3 ? vec3(0.85, 0.92, 1.0) : ch < 0.5 ? vec3(0.25, 0.45, 1.0) : ch < 0.68 ? vec3(0.6, 0.3, 1.0) : ch < 0.84 ? vec3(0.15, 0.85, 0.8) : vec3(1.0, 0.55, 0.2);
+        float dTop = vTop - vWorld.y;
+        float crownBand = (1.0 - smoothstep(0.2, 1.4, dTop)) * 1.6 + exp(-max(dTop, 0.0) / 6.0) * 0.14;
+        col += crownCol * crownBand * crownOn * step(dTop, 40.0);
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
     `,

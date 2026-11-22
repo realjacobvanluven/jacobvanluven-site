@@ -86,6 +86,32 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     }
   }
 
+  // Traffic signals at main intersections near the camera: where two roads cross and one is a main road.
+  // Each corner gets a signal head; one direction shows green, the cross street red, a few amber.
+  const ends = new Map();
+  roads.forEach((road, ri) => {
+    for (const p of road.line) {
+      const key = `${Math.round(p[0] / 10)},${Math.round(p[1] / 10)}`;
+      const e = ends.get(key) ?? { p, roads: new Set(), main: false };
+      e.roads.add(ri); e.main ||= road.main;
+      ends.set(key, e);
+    }
+  });
+  const placed = [];
+  for (const e of ends.values()) {
+    const d = Math.hypot(e.p[0] - camera[0], e.p[1] - camera[1]);
+    if (e.roads.size < 2 || !e.main || d > 1800 || d < 150) continue;
+    if (placed.some((q) => Math.hypot(q[0] - e.p[0], q[1] - e.p[1]) < 30)) continue;
+    placed.push(e.p);
+    const amber = rand() < 0.15;
+    const ns = rand() < 0.5;
+    for (const [dx, dy, axis] of [[7, 7, 0], [-7, -7, 0], [7, -7, 1], [-7, 7, 1]]) {
+      const go = (axis === 0) === ns;
+      const color = go ? (amber ? [4.5, 2.2, 0.2] : [0.25, 4.2, 1.6]) : [4.6, 0.25, 0.12];
+      lamps.push({ p: [e.p[0] + dx, 5.5, -(e.p[1] + dy)], color, size: 0.45 });
+    }
+  }
+
   const carLights = [];
   for (const lane of lanes) for (let i = 0; i < lane.cars.length * 2; i++) carLights.push({ p: [0, 0, 0], color: lane.color, size: lane.size });
   const bodyCount = lanes.reduce((n, l) => n + (l.bodies ? l.cars.length : 0), 0);
