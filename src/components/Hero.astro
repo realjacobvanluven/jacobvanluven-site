@@ -428,7 +428,8 @@ const stops = await heroStops();
     color: var(--text-muted);
   }
 
-  /* Horizontal look-around: grab the skyline (vertical scrolling still works on touch). */
+  /* Look-around: grab the skyline and drag any direction with a mouse; on touch, sideways swipes turn the view
+     (a mostly vertical swipe still scrolls the page). */
   .stage {
     touch-action: pan-y;
   }
@@ -635,6 +636,11 @@ const stops = await heroStops();
     // on the right. Limits keep the edges of the frame inside the city data (compass 258° … 74°).
     const pan = { value: 0, velocity: 0, dragging: false, coasting: false, lastT: 0 };
     let PAN_MIN = -30, PAN_MAX = 80;
+    // Vertical tilt (degrees added to the opening pitch): down toward the water, up toward the sky and peaks.
+    // It eases back to the opening angle after release.
+    const TILT_MIN = -20, TILT_MAX = 30;
+    let tilt = 0;
+    const clampTilt = (v: number) => Math.min(TILT_MAX, Math.max(TILT_MIN, v));
     const panLimits = (f: View) => {
       const hfov = 2 * Math.atan(Math.tan((f.fov * Math.PI) / 360) * (innerWidth / innerHeight)) * (180 / Math.PI);
       PAN_MIN = Math.min(0, 258 + hfov / 2 - f.bearing);
@@ -667,8 +673,14 @@ const stops = await heroStops();
             ctl?.poke();
           }
           pan.lastT = now;
-          let target: View = { bearing: f.bearing + pan.value, pitch: f.pitch, fov: f.fov };
-          if (tour.state.revealed) target = { bearing: f.bearing + pan.value, pitch: f.pitch - (portraitNow() ? 2.5 : 1.8), fov: f.fov };
+          if (!pan.dragging && tilt !== 0) {
+            const dtt = Math.min(0.1, (now - (lastNow || now)) / 1000);
+            tilt *= Math.exp(-dtt / 0.5);
+            if (Math.abs(tilt) < 0.02) tilt = 0;
+            ctl?.poke();
+          }
+          let target: View = { bearing: f.bearing + pan.value, pitch: f.pitch + tilt, fov: f.fov };
+          if (tour.state.revealed) target = { bearing: f.bearing + pan.value, pitch: f.pitch + tilt - (portraitNow() ? 2.5 : 1.8), fov: f.fov };
           // Ease toward it (frame-rate independent).
           const dt = Math.min(0.1, (now - (lastNow || now)) / 1000);
           lastNow = now;
@@ -715,10 +727,14 @@ const stops = await heroStops();
         const hfov = 2 * Math.atan(Math.tan((fov * Math.PI) / 360) * (innerWidth / innerHeight)) * (180 / Math.PI);
         return hfov / innerWidth;
       };
-      let start: { id: number; x: number; y: number; decided: boolean; lastX: number; lastT: number } | null = null;
+      const degPerPxY = () => {
+        const fov = current?.fov ?? ctl.hero.framing.fov;
+        return fov / innerHeight;
+      };
+      let start: { id: number; x: number; y: number; decided: boolean; lastX: number; lastY: number; lastT: number; touch: boolean } | null = null;
       stage.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || (e.target as Element).closest('a, button, .copy, .cards')) return;
-        start = { id: e.pointerId, x: e.clientX, y: e.clientY, decided: false, lastX: e.clientX, lastT: performance.now() };
+        start = { id: e.pointerId, x: e.clientX, y: e.clientY, decided: false, lastX: e.clientX, lastY: e.clientY, lastT: performance.now(), touch: e.pointerType === 'touch' };
         pan.coasting = false;
         pan.velocity = 0;
       });
@@ -728,7 +744,8 @@ const stops = await heroStops();
         if (!start.decided) {
           if (Math.hypot(dx, dy) < 6) return;
           start.decided = true;
-          if (Math.abs(dx) < Math.abs(dy)) { start = null; return; } // a vertical swipe: let the page scroll
+          // On touch a mostly vertical swipe scrolls the page; with a mouse or pen it tilts the view.
+          if (start.touch && Math.abs(dx) < Math.abs(dy)) { start = null; return; }
           pan.dragging = true;
           stage.classList.add('dragging');
           try { stage.setPointerCapture(e.pointerId); } catch { /* synthetic or ended pointer */ }
@@ -738,7 +755,9 @@ const stops = await heroStops();
         pan.value = clampPan(pan.value + step);
         const dtm = Math.max(1, t - start.lastT) / 1000;
         pan.velocity = pan.velocity * 0.5 + (step / dtm) * 0.5;
+        tilt = clampTilt(tilt + (e.clientY - start.lastY) * degPerPxY());
         start.lastX = e.clientX;
+        start.lastY = e.clientY;
         start.lastT = t;
         ctl.poke();
       });
