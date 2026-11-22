@@ -55,6 +55,9 @@ try {
       maxPixelRatio: dprOverride ?? (layout === 'phone' ? 1.5 : 1),
       devicePixelRatio: dprOverride ?? (layout === 'phone' ? 3 : 1), // simulate a phone screen in the headless capture
       preserveDrawingBuffer: true,
+      // &height=metres&pitch=degrees (offset): camera height experiments.
+      cameraHeight: params.get('height') ? +params.get('height') : undefined,
+      pitchOffset: params.get('pitchOffset') ? +params.get('pitchOffset') : 0,
       tier: params.get('tier') ?? (layout === 'phone' ? 'medium' : 'high'),
     });
     // &highlight=signatures paints the hand-built towers flat orange (visibility check).

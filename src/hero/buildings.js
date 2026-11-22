@@ -170,9 +170,11 @@ export function createFacadeMaterial(uniforms) {
         // Far away: average instead of aliasing.
         float avgLit = mix(litShare, 0.27, isOffice);
         vec3 avgLamp = mix(mix(warm, neutral, 0.4), cool, isOffice * 0.7) * 0.62 * uWindowIntensity * avgLit;
-        vec3 far = mix(frameCol, glassCol * (1.0 - avgLit * 0.85) + avgLamp, windowArea);
-        far = mix(far, slabCol, isResi * 0.16);
-        float farMix = smoothstep(0.35, 0.9, max(fw.x, fw.y));
+        // Distant facades read as dark walls with a glow of windows, not pale blocks: darken the wall part.
+        vec3 far = mix(frameCol * 0.55, glassCol * (1.0 - avgLit * 0.85) + avgLamp, windowArea);
+        far = mix(far, slabCol * 0.6, isResi * 0.16);
+        // Keep individual windows until they're well under a pixel (a little sparkle reads as city lights).
+        float farMix = smoothstep(0.7, 1.8, max(fw.x, fw.y));
         vec3 col = mix(near, far, farMix);
 
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);

@@ -58,8 +58,9 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   **Science World** (geodesic dome, on the right near the water), Rogers Arena, and the Cambie Bridge.
   Footprint data won't capture domes/roofs/the saucer, so hand-model these landmarks as simple, recognizable
   low-poly meshes positioned with real coordinates.
-- **Camera and framing (decided 2026-11-21):** on the Olympic Village seawall at the water's edge
-  (49.27175, −123.1078), about 40 m up, looking slightly down across False Creek. Normal lens framed on downtown
+- **Camera and framing (decided 2026-11-21):** above the Olympic Village seawall at the water's edge
+  (49.27175, −123.1078), **100 m up** (raised from 40 m so the downtown core and signature towers show over
+  Yaletown), looking slightly down across False Creek. Normal lens framed on downtown
   (BC Place and Harbour Centre); the camera turns toward Science World (far right, ~60° east of north) with the
   cursor, scroll or phone tilt. Keep the full captured area in the data, but at render time draw only what's in view
   and use simpler detail for distant buildings.

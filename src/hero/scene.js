@@ -14,7 +14,7 @@ import { createBoats, createAquabus } from './boats.js';
 import { createComposer } from './post.js';
 
 /**
- * Camera: on the Olympic Village seawall at the water's edge (the data origin), 40 m up, looking slightly
+ * Camera: above the Olympic Village seawall at the water's edge (the data origin), 100 m up, looking slightly
  * down across False Creek. Desktop frames the Yaletown towers and BC Place, with the Cambie Bridge's north
  * approach at the left edge and Harbour Centre to the right; phone centres BC Place.
  * Local metres: x east, y north. bearing: compass degrees; pitch: degrees (negative = down); fov: vertical degrees.
@@ -22,10 +22,10 @@ import { createComposer } from './post.js';
 export const CAMERA_POSITION = [0, 0];
 /** The real North Shore reads small at ~12 km; a gentle vertical exaggeration makes it feel closer. */
 export const MOUNTAIN_EXAGGERATION = 1.2;
-export const CAMERA_HEIGHT = 40;
+export const CAMERA_HEIGHT = 100; // decided 2026-11-21: high enough to see the downtown core over Yaletown
 export const FRAMING = {
-  desktop: { bearing: 320, pitch: -2.6, fov: 35 },
-  phone: { bearing: 331, pitch: -4.5, fov: 60 },
+  desktop: { bearing: 320, pitch: -5.8, fov: 35 },
+  phone: { bearing: 331, pitch: -7.5, fov: 60 },
 };
 
 /**
@@ -87,7 +87,7 @@ const angleDiff = (a, b) => ((a - b + 540) % 360) - 180;
 /**
  * @param {{ canvas, width, height, layout: 'desktop'|'phone', tier?: string, dataUrl?: string, terrain?: 'dem'|'procedural', maxPixelRatio?: number }} opts
  */
-export async function createSkylineScene({ canvas, width, height, layout = 'desktop', tier, dataUrl = '/data/skyline.json', terrain = 'dem', maxPixelRatio = Infinity, devicePixelRatio, preserveDrawingBuffer = false }) {
+export async function createSkylineScene({ canvas, width, height, layout = 'desktop', tier, dataUrl = '/data/skyline.json', terrain = 'dem', maxPixelRatio = Infinity, devicePixelRatio, preserveDrawingBuffer = false, cameraHeight = CAMERA_HEIGHT, pitchOffset = 0 }) {
   const detail = SCENE_DETAIL[layout];
   let framing = framingFor(width / height);
   let tierName = tier ?? (layout === 'phone' ? 'medium' : 'high');
@@ -106,10 +106,10 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const camera = new THREE.PerspectiveCamera(framing.fov, width / height, 4, 40000);
   const aim = (bearing, pitch) => {
     const b = THREE.MathUtils.degToRad(bearing), p = THREE.MathUtils.degToRad(pitch);
-    camera.position.set(CAMERA_POSITION[0], CAMERA_HEIGHT, -CAMERA_POSITION[1]);
-    camera.lookAt(camera.position.x + Math.sin(b) * Math.cos(p), CAMERA_HEIGHT + Math.sin(p), camera.position.z - Math.cos(b) * Math.cos(p));
+    camera.position.set(CAMERA_POSITION[0], cameraHeight, -CAMERA_POSITION[1]);
+    camera.lookAt(camera.position.x + Math.sin(b) * Math.cos(p), cameraHeight + Math.sin(p), camera.position.z - Math.cos(b) * Math.cos(p));
   };
-  aim(framing.bearing, framing.pitch);
+  aim(framing.bearing, framing.pitch + pitchOffset);
   /** Point the camera: bearing/pitch in degrees, fov (vertical, degrees) optional. */
   const look = ({ bearing, pitch, fov }) => {
     if (fov !== undefined && fov !== camera.fov) {
@@ -166,7 +166,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const buildingList = data.buildings.filter((b) => {
     if (sigRings.some((r) => insideRing(b.c, r))) { culled.signatures++; return false; }
     const d = distanceTo(b.c);
-    if (d < 700 && b.c[1] < 150) {
+    if (d < 260 && b.c[1] < 150) {
       let crossesWater = false;
       for (let i = 1; i <= 12 && !crossesWater; i++) {
         const k = i / 13;
@@ -174,7 +174,9 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
       }
       if (!crossesWater) { culled.southShore++; return false; }
     }
-    if (L.bcPlace && b.h < 32 && d < bcDistance - 90 && Math.abs(angleDiff(bearingTo(b.c), bcBearing)) < 15) {
+    // At 40 m the low blocks in front of BC Place hid its base; from 100 m they don't, so this only applies
+    // to lower cameras.
+    if (CAMERA_HEIGHT < 70 && L.bcPlace && b.h < 32 && d < bcDistance - 90 && Math.abs(angleDiff(bearingTo(b.c), bcBearing)) < 15) {
       culled.frontOfBcPlace++;
       return false;
     }
@@ -236,7 +238,8 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const animators = []; // (time) => void, run before every frame
 
   // Street life: lamps along the downtown streets, traffic on the main roads.
-  const streets = createStreets(data.roads, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing });
+  const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing });
+  scene.add(streets.surface);
   addLights(streets.lamps, 2);
   if (streets.carLights.length) {
     const streetTraffic = createLightPoints(streets.carLights, uniforms);

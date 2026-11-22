@@ -144,9 +144,19 @@ export function createGround(uniforms) {
     `,
     fragmentShader: /* glsl */ `
       ${skyGlsl}
+      ${hashGlsl}
       ${fogGlsl}
       varying vec3 vWorld;
-      void main() { gl_FragColor = vec4(applyFog(vec3(0.014, 0.015, 0.018), vWorld), 1.0); }
+      void main() {
+        // Not flat black: lots, plazas and grass patches vary a little, with a faint warm wash of
+        // street light bouncing off the ground.
+        vec2 cell = floor(vWorld.xz / 22.0 + vec2(hash12(floor(vWorld.xz / 90.0)) * 0.5)); // irregular patches
+        float v = hash12(cell);
+        vec3 base = mix(vec3(0.014, 0.015, 0.018), vec3(0.012, 0.016, 0.013), step(0.75, v)); // some grass
+        base *= 0.88 + 0.24 * hash12(cell * 1.7 + 3.0);
+        base += vec3(0.006, 0.004, 0.002) * hash12(floor(vWorld.xz / 60.0));
+        gl_FragColor = vec4(applyFog(base, vWorld), 1.0);
+      }
     `,
   });
   return new THREE.Mesh(g, m);
