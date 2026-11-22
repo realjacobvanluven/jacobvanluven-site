@@ -96,4 +96,9 @@ import Hero from '../components/Hero.astro';
     font-weight: 600;
     line-height: 1.3;
   }
+  /* The scroll tour in the hero shows these sections one by one; keep this list for visitors without it
+     (reduced motion, or no JS). */
+  :global(html.hero-motion) .cards {
+    display: none;
+  }
 </style>

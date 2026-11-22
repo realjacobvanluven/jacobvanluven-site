@@ -1,19 +1,20 @@
 ---
 /**
- * Homepage hero: the Vancouver skyline at blue hour.
+ * Homepage hero: the Vancouver skyline at blue hour, and a scroll tour of the site's sections.
  *
  * Progressive enhancement:
  *  - Always: a pre-rendered poster (the LCP image) + the headline + "Skip to work". Works without JS.
- *  - With JS, WebGL and no reduced-motion preference: after the page has loaded, the live 3D scene
- *    (src/hero/, three.js, /data/skyline.json) loads in its own chunk and fades in over the poster.
- *    Scrolling through the hero turns the camera from downtown toward Science World; the cursor (desktop)
- *    or device tilt (phones) adds a gentle look-around. Landmarks are hotspot links: hover/focus shows the
- *    label, click flies the camera in and then opens the page.
+ *  - With motion allowed: the hero becomes a scroll tour. Each scroll "stop" belongs to a landmark and its
+ *    section (BC Place → Experience, etc.); a card for that section appears, and a rail shows the stops.
+ *  - With JS + WebGL: the live 3D scene (src/hero/, loaded lazily) fades in over the poster and the camera
+ *    eases from landmark to landmark as you scroll. The cursor (desktop) or device tilt (phones) adds a
+ *    gentle look-around. Hotspot markers sit on the landmarks; following one flies the camera in.
+ *  - Reduced motion / no JS / no WebGL: poster + headline, and the section cards below the hero (index.astro).
  */
 import { getImage } from 'astro:assets';
-import { getCollection } from 'astro:content';
 import posterDesktop from '../assets/hero/poster-desktop.jpg';
 import posterPhone from '../assets/hero/poster-phone.jpg';
+import { heroStops } from '../data/hero-stops';
 
 interface Props {
   title: string;
@@ -27,20 +28,10 @@ const desktopSet = await srcset(posterDesktop, [960, 1440, 1920, 2880]);
 const phoneSet = await srcset(posterPhone, [390, 585, 780]);
 const fallback = await getImage({ src: posterDesktop, width: 1440, format: 'webp' });
 
-// Landmark hotspots → site sections. Science World is "the lab" (Tools) once a tool is published;
-// until then it leads to the Comms work.
-const hasTools = (await getCollection('tools', (t) => !t.data.draft)).length > 0;
-const hotspots = [
-  { id: 'bcPlace', place: 'BC Place', label: 'Experience', href: '/experience/' },
-  { id: 'tower', place: 'Downtown', label: 'Journalism', href: '/journalism/' },
-  { id: 'harbourCentre', place: 'Harbour Centre', label: 'About & contact', href: '/about/' },
-  hasTools
-    ? { id: 'scienceWorld', place: 'Science World', label: 'Tools', href: '/tools/' }
-    : { id: 'scienceWorld', place: 'Science World', label: 'Comms', href: '/comms/' },
-];
+const stops = await heroStops();
 ---
 
-<section class="hero" data-hero aria-labelledby="hero-title">
+<section class="hero" data-hero aria-labelledby="hero-title" style={`--stops: ${stops.length}`}>
   <div class="stage" data-stage>
     <picture class="poster">
       <source media="(orientation: portrait)" type="image/webp" srcset={phoneSet} sizes="100vw" />
@@ -57,19 +48,20 @@ const hotspots = [
     <canvas class="scene" data-canvas aria-hidden="true"></canvas>
     <div class="shade" aria-hidden="true"></div>
 
-    <nav class="hotspots" aria-label="Explore the skyline" data-hotspots>
+    {/* Landmark markers (3D only). Following one flies the camera in, then opens the page. */}
+    <div class="hotspots" data-hotspots>
       {
-        hotspots.map((h) => (
-          <a class="hotspot" href={h.href} data-hotspot={h.id} hidden>
-            <span class="dot" aria-hidden="true" />
+        stops.map((s) => (
+          <a class="hotspot" href={s.href} data-hotspot={s.id} hidden tabindex="-1" aria-hidden="true">
+            <span class="dot" />
             <span class="tag">
-              <span class="place">{h.place}</span>
-              <span class="section">{h.label}</span>
+              <span class="place">{s.place}</span>
+              <span class="section">{s.label}</span>
             </span>
           </a>
         ))
       }
-    </nav>
+    </div>
 
     <div class="copy" data-copy>
       <p class="label">Jacob Van Luven</p>
@@ -77,6 +69,33 @@ const hotspots = [
       <p class="subheading">{subheading}</p>
       <a class="skip" href="#work">Skip to work <span aria-hidden="true">↓</span></a>
     </div>
+
+    {/* The tour: one card per stop, shown as you scroll. */}
+    <ol class="cards" data-cards aria-label="Sections">
+      {
+        stops.map((s, i) => (
+          <li class="card" data-card={s.id} data-index={i + 1}>
+            <p class="place">{s.place}</p>
+            <h2>{s.label}</h2>
+            <p class="desc">{s.description}</p>
+            <a class="go" href={s.href} data-go={s.id}>
+              Open {s.label} <span aria-hidden="true">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+
+    <nav class="rail" aria-label="Skyline tour" data-rail>
+      <button type="button" data-stop="0" aria-label="Back to the start"><span class="rail-label" aria-hidden="true">Start</span></button>
+      {
+        stops.map((s, i) => (
+          <button type="button" data-stop={i + 1} aria-label={`Go to ${s.label}`}>
+            <span class="rail-label" aria-hidden="true">{s.label}</span>
+          </button>
+        ))
+      }
+    </nav>
 
     <button class="tilt" type="button" data-tilt hidden>Tilt to look around</button>
   </div>
@@ -89,9 +108,9 @@ const hotspots = [
     min-height: 32rem;
   }
 
-  /* Room to scroll the camera turn. Set before first paint (BaseLayout) so nothing shifts later. */
+  /* Room to scroll the tour: a screen per stop. Set before first paint (BaseLayout) so nothing shifts. */
   :global(html.hero-motion) .hero {
-    height: 210svh;
+    height: calc(100svh + var(--stops) * 85svh);
   }
 
   .stage {
@@ -121,7 +140,6 @@ const hotspots = [
     opacity: 1;
   }
 
-  /* Legibility: darken the top (nav) and bottom (headline) a little. */
   .shade {
     position: absolute;
     inset: 0;
@@ -152,6 +170,14 @@ const hotspots = [
     bottom: clamp(2rem, 9svh, 6rem);
     max-width: 44rem;
     text-shadow: 0 2px 18px rgb(0 0 0 / 0.6);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+
+  .copy.away {
+    opacity: 0;
+    transform: translateY(1rem);
+    visibility: hidden;
+    transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
   }
 
   .copy h1 {
@@ -171,7 +197,8 @@ const hotspots = [
     margin: 0 0 1.25rem;
   }
 
-  .skip {
+  .skip,
+  .go {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
@@ -189,11 +216,137 @@ const hotspots = [
     backdrop-filter: blur(6px);
   }
 
-  .skip:hover {
+  .skip:hover,
+  .go:hover {
     border-color: var(--accent);
     color: var(--accent);
   }
 
+  /* ---- Tour cards ---- */
+  .cards {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Without the tour (reduced motion, or before the script runs) the cards stay out of the way;
+     the same sections are linked below the hero. */
+  .card {
+    display: none;
+  }
+
+  :global(html.hero-motion) .card {
+    position: absolute;
+    right: calc(var(--gutter) + 3rem);
+    top: 50%;
+    display: block;
+    width: min(24rem, calc(100% - 2 * var(--gutter) - 3rem));
+    max-width: none;
+    padding: 1.5rem 1.5rem 1.4rem;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 12px;
+    background: rgb(8 9 14 / 0.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(calc(-50% + 1.5rem));
+    transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s linear 0.4s;
+  }
+
+  :global(html.hero-motion) .card.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .card .place {
+    margin: 0;
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-soft);
+  }
+
+  .card h2 {
+    margin: 0.35rem 0 0.6rem;
+    font-size: clamp(1.75rem, 3.4vw, 2.4rem);
+  }
+
+  .card .desc {
+    margin: 0 0 1.25rem;
+    color: var(--text-muted);
+  }
+
+  /* ---- Rail ---- */
+  .rail {
+    display: none;
+  }
+
+  :global(html.hero-motion) .rail {
+    position: absolute;
+    right: var(--gutter);
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .rail button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .rail button::before {
+    content: '';
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.4);
+    transition: transform 0.25s ease, background 0.25s ease;
+  }
+
+  .rail button[aria-current='step']::before {
+    background: var(--accent);
+    transform: scale(1.6);
+  }
+
+  .rail-label {
+    position: absolute;
+    right: 2.6rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgb(8 8 10 / 0.8);
+    color: var(--text);
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .rail button:hover .rail-label,
+  .rail button:focus-visible .rail-label {
+    opacity: 1;
+  }
+
+  .rail button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -4px;
+    border-radius: 999px;
+  }
+
+  /* ---- Hotspot markers ---- */
   .hotspots {
     position: absolute;
     inset: 0;
@@ -207,7 +360,7 @@ const hotspots = [
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem; /* generous touch target around the dot */
+    padding: 0.5rem;
     margin: -1.375rem 0 0 -1.375rem;
     color: var(--text);
     text-decoration: none;
@@ -228,6 +381,7 @@ const hotspots = [
     border: 2px solid var(--accent);
     background: rgb(255 122 26 / 0.18);
     box-shadow: 0 0 12px rgb(255 122 26 / 0.6);
+    transition: transform 0.3s ease;
   }
 
   .dot::after {
@@ -236,6 +390,10 @@ const hotspots = [
     inset: 0.45rem;
     border-radius: 999px;
     background: var(--accent);
+  }
+
+  .hotspot.active .dot {
+    transform: scale(1.25);
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -262,46 +420,28 @@ const hotspots = [
     transition: opacity 0.2s ease, transform 0.2s ease;
   }
 
-  .place {
+  .tag .place {
     font: 500 0.6875rem var(--font-mono);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-muted);
   }
 
-  .section {
+  .tag .section {
     font-family: var(--font-display);
     font-weight: 600;
     font-size: 1rem;
   }
 
-  .hotspot:hover .tag,
-  .hotspot:focus-visible .tag {
+  .hotspot:hover .tag {
     opacity: 1;
     transform: none;
   }
 
-  .hotspot:focus-visible {
-    outline: none;
-  }
-
-  .hotspot:focus-visible .dot {
-    outline: 3px solid var(--focus);
-    outline-offset: 3px;
-  }
-
-  /* Touch screens have no hover: show the labels. */
-  @media (hover: none) {
-    .tag {
-      opacity: 1;
-      transform: none;
-    }
-  }
-
   .tilt {
     position: absolute;
-    right: var(--gutter);
-    bottom: clamp(2rem, 9svh, 6rem);
+    left: var(--gutter);
+    top: 5rem;
     min-height: 2.75rem;
     padding: 0 0.9rem;
     border: 1px solid rgb(255 255 255 / 0.3);
@@ -318,10 +458,27 @@ const hotspots = [
     display: none;
   }
 
-  @media (max-width: 40rem) {
-    .tilt {
-      bottom: auto;
-      top: 5rem;
+  /* Phones: cards sit over the calm water at the bottom; the rail is a slim column on the right. */
+  @media (max-width: 40rem), (orientation: portrait) {
+    :global(html.hero-motion) .card {
+      left: var(--gutter);
+      right: calc(var(--gutter) + 2.5rem);
+      top: auto;
+      bottom: clamp(1.5rem, 6svh, 3rem);
+      width: auto;
+      transform: translateY(1.5rem);
+    }
+
+    :global(html.hero-motion) .card.active {
+      transform: none;
+    }
+
+    :global(html.hero-motion) .rail {
+      right: calc(var(--gutter) * 0.25);
+    }
+
+    .rail-label {
+      display: none;
     }
   }
 </style>
@@ -342,8 +499,8 @@ const hotspots = [
 
   /**
    * Start the 3D scene on the first sign of a visitor (scroll, pointer, touch, key) or ~4 s after load,
-   * whichever comes first. The poster shows the same view meanwhile, so there's no visible gap, and the
-   * heavy work stays out of the critical loading window.
+   * whichever comes first. The poster shows the same view meanwhile, and the heavy work stays out of the
+   * critical loading window.
    */
   function whenEngaged(fn: () => void) {
     let done = false;
@@ -360,37 +517,91 @@ const hotspots = [
     else window.addEventListener('load', timer, { once: true });
   }
 
-  if (root && motionOK && webglAvailable()) whenEngaged(() => start(root));
-  else html.classList.remove('hero-motion');
+  if (root && motionOK) {
+    const tour = setUpTour(root);
+    if (webglAvailable()) whenEngaged(() => start(root, tour));
+  } else {
+    html.classList.remove('hero-motion');
+  }
 
-  async function start(root: HTMLElement) {
+  /** Tour position from scroll: 0 = start, 1…N = the stops. Drives cards, rail and (if loaded) the camera. */
+  function setUpTour(root: HTMLElement) {
+    const cards = [...root.querySelectorAll<HTMLElement>('[data-card]')];
+    const rail = [...root.querySelectorAll<HTMLButtonElement>('[data-stop]')];
+    const copy = root.querySelector<HTMLElement>('[data-copy]')!;
+    const n = cards.length;
+    let active = -1;
+
+    const position = () => {
+      const r = root.getBoundingClientRect();
+      const range = Math.max(1, r.height - innerHeight);
+      return Math.min(1, Math.max(0, -r.top / range)) * n;
+    };
+
+    const update = () => {
+      const p = position();
+      const nearest = Math.round(p);
+      const settled = Math.abs(p - nearest) < 0.32;
+      const now = settled ? nearest : -1;
+      if (now !== active) {
+        active = now;
+        cards.forEach((c, i) => c.classList.toggle('active', i + 1 === active));
+        copy.classList.toggle('away', p > 0.3);
+        root.querySelectorAll('[data-hotspot]').forEach((a) => a.classList.toggle('active', active > 0 && a.getAttribute('data-hotspot') === cards[active - 1]?.dataset.card));
+      } else {
+        copy.classList.toggle('away', p > 0.3);
+      }
+      rail.forEach((b, i) => (i === nearest ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current')));
+    };
+
+    rail.forEach((b) =>
+      b.addEventListener('click', () => {
+        const k = Number(b.dataset.stop);
+        const top = root.getBoundingClientRect().top + scrollY;
+        const range = root.offsetHeight - innerHeight;
+        window.scrollTo({ top: top + (range * k) / n, behavior: 'smooth' });
+      }),
+    );
+    // Keyboard: tabbing to a card's link brings its stop into view.
+    cards.forEach((c, i) =>
+      c.querySelector('a')!.addEventListener('focus', () => {
+        if (Math.round(position()) === i + 1) return;
+        const top = root.getBoundingClientRect().top + scrollY;
+        window.scrollTo({ top: top + ((root.offsetHeight - innerHeight) * (i + 1)) / n });
+      }),
+    );
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+    return { position, n, ids: cards.map((c) => c.dataset.card!) };
+  }
+
+  async function start(root: HTMLElement, tour: ReturnType<typeof setUpTour>) {
     const stage = root.querySelector<HTMLElement>('[data-stage]')!;
     const canvas = root.querySelector<HTMLCanvasElement>('[data-canvas]')!;
-    const copy = root.querySelector<HTMLElement>('[data-copy]')!;
     const tiltButton = root.querySelector<HTMLButtonElement>('[data-tilt]')!;
     const spots = [...root.querySelectorAll<HTMLAnchorElement>('[data-hotspot]')];
     const coarse = window.matchMedia('(pointer: coarse)').matches;
     const isPhone = coarse && Math.min(screen.width, screen.height) < 820;
 
-    const [{ startHero }, { TURN_BEARING }] = await Promise.all([import('../hero/runtime.js'), import('../hero/scene.js')]);
+    const { startHero } = await import('../hero/runtime.js');
 
     // Look-around input, smoothed per frame.
     const look = { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 };
     if (!coarse) {
       window.addEventListener('pointermove', (e) => {
-        look.targetYaw = (e.clientX / innerWidth - 0.5) * 6;
-        look.targetPitch = -(e.clientY / innerHeight - 0.5) * 2;
+        look.targetYaw = (e.clientX / innerWidth - 0.5) * 5;
+        look.targetPitch = -(e.clientY / innerHeight - 0.5) * 1.6;
       }, { passive: true });
     }
     const onTilt = (e: DeviceOrientationEvent) => {
       if (e.gamma === null) return;
-      look.targetYaw = Math.max(-1, Math.min(1, e.gamma / 25)) * 8;
+      look.targetYaw = Math.max(-1, Math.min(1, e.gamma / 25)) * 7;
     };
     const DOE = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> } | undefined;
     if (coarse && DOE) {
       if (typeof DOE.requestPermission === 'function') {
-        // iOS: permission must come from a tap. If declined, the hero just stays still.
-        tiltButton.hidden = false;
+        tiltButton.hidden = false; // iOS: permission must come from a tap; if declined, the view stays still
         tiltButton.addEventListener('click', async () => {
           tiltButton.hidden = true;
           try {
@@ -402,11 +613,11 @@ const hotspots = [
       }
     }
 
-    // Fly-to animation when a hotspot is followed.
     type View = { bearing: number; pitch: number; fov: number };
     let flight: { from: View; to: View; t0: number; href: string } | null = null;
     let current: View | null = null;
     const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+    const smooth = (t: number) => t * t * (3 - 2 * t);
     const angleLerp = (a: number, b: number, t: number) => a + ((((b - a) % 360) + 540) % 360 - 180) * t;
     const FLIGHT_MS = 1100;
 
@@ -418,19 +629,32 @@ const hotspots = [
         layout: isPhone ? 'phone' : 'desktop',
         dataUrl: '/data/skyline.json',
         onFrame(hero, now) {
-          const r = root.getBoundingClientRect();
-          const range = Math.max(1, r.height - innerHeight);
-          const p = Math.min(1, Math.max(0, -r.top / range));
-          const turn = p * p * (3 - 2 * p);
-          const portrait = innerWidth < innerHeight;
           const f = hero.framing;
+          const portrait = innerWidth < innerHeight;
+          // Camera view for each tour stop: the landmark slightly left of centre on desktop (the card is on
+          // the right), centred on phones (the card is below), with a slightly tighter lens.
+          const hfov = 2 * Math.atan(Math.tan((f.fov * Math.PI) / 360) * (innerWidth / innerHeight)) * (180 / Math.PI);
+          const views: View[] = [{ bearing: f.bearing, pitch: f.pitch, fov: f.fov }];
+          for (const id of tour.ids) {
+            const v = hero.viewOf(id);
+            if (!v) { views.push(views[views.length - 1]); continue; }
+            views.push({
+              bearing: v.bearing + (portrait ? 0 : hfov * 0.14),
+              pitch: f.pitch + Math.max(-2, Math.min(3, v.pitch)) * 0.5,
+              fov: f.fov * 0.85,
+            });
+          }
+          // Ease between stops, holding still around each one.
+          const p = tour.position();
+          const i = Math.min(views.length - 2, Math.floor(p));
+          const u = smooth(Math.min(1, Math.max(0, (p - i - 0.25) / 0.5)));
+          const a = views[i], b = views[i + 1];
           look.yaw += (look.targetYaw - look.yaw) * 0.08;
           look.pitch += (look.targetPitch - look.pitch) * 0.08;
-
           let view: View = {
-            bearing: angleLerp(f.bearing, portrait ? TURN_BEARING.phone : TURN_BEARING.desktop, turn) + look.yaw,
-            pitch: f.pitch + look.pitch,
-            fov: f.fov,
+            bearing: angleLerp(a.bearing, b.bearing, u) + look.yaw,
+            pitch: a.pitch + (b.pitch - a.pitch) * u + look.pitch,
+            fov: a.fov + (b.fov - a.fov) * u,
           };
           if (flight) {
             const t = Math.min(1, (now - flight.t0) / FLIGHT_MS);
@@ -441,41 +665,38 @@ const hotspots = [
               fov: flight.from.fov + (flight.to.fov - flight.from.fov) * k,
             };
             ctl?.poke();
-            if (t > 0.6) stage.classList.add('leaving'); // fade to black over the last part of the flight
+            if (t > 0.6) stage.classList.add('leaving');
             if (t >= 1) { const href = flight.href; flight = null; window.location.assign(href); }
           }
           current = view;
           hero.look(view);
-          copy.style.opacity = String(Math.max(0, 1 - turn * 2.4));
-          copy.style.visibility = turn > 0.45 ? 'hidden' : '';
 
-          for (const a of spots) {
-            const pt = hero.project(a.dataset.hotspot!);
+          for (const el of spots) {
+            const pt = hero.project(el.dataset.hotspot!);
             const show = !!pt && pt.x > 24 && pt.x < innerWidth - 24 && pt.y > 70 && pt.y < innerHeight - 24;
-            if (a.hidden === show) a.hidden = !show;
-            if (show) a.style.transform = `translate(${pt!.x.toFixed(1)}px, ${pt!.y.toFixed(1)}px)`;
+            if (el.hidden === show) el.hidden = !show;
+            if (show) el.style.transform = `translate(${pt!.x.toFixed(1)}px, ${pt!.y.toFixed(1)}px)`;
           }
         },
       });
     } catch (err) {
       console.warn('Skyline hero unavailable, keeping the still image.', err);
-      html.classList.remove('hero-motion');
       return;
     }
 
     canvas.classList.add('ready');
 
-    for (const a of spots) {
-      a.addEventListener('click', (e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || flight || !current) return;
-        const target = ctl.hero.viewOf(a.dataset.hotspot!);
-        if (!target) return;
-        e.preventDefault();
-        flight = { from: current, to: { ...target, fov: current.fov * 0.45 }, t0: performance.now(), href: a.href };
-        ctl.poke();
-      });
-    }
-    // Coming back via the browser's back/forward cache: undo the fade.
+    // Following a marker or a card's link: fly the camera to the landmark, then open the page.
+    const fly = (id: string, href: string, e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || flight || !current) return;
+      const target = ctl.hero.viewOf(id);
+      if (!target) return;
+      e.preventDefault();
+      flight = { from: current, to: { ...target, fov: current.fov * 0.45 }, t0: performance.now(), href };
+      ctl.poke();
+    };
+    for (const a of spots) a.addEventListener('click', (e) => fly(a.dataset.hotspot!, a.href, e));
+    for (const a of root.querySelectorAll<HTMLAnchorElement>('[data-go]')) a.addEventListener('click', (e) => fly(a.dataset.go!, a.href, e));
     window.addEventListener('pageshow', () => stage.classList.remove('leaving'));
   }
 </script>

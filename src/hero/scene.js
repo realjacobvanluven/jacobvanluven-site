@@ -212,11 +212,17 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   addLights(seawall.lamps, 0);
 
   let bridgeStats = null;
+  const animators = []; // (time) => void, run before every frame
   if (data.bridge) {
     const br = createBridge(data.bridge, { isWater, envMap });
     scene.add(br.group);
     addLights(br.lights, 0);
     bridgeStats = br.stats;
+    // Moving traffic: its own light layer, positions rewritten each frame.
+    const traffic = createLightPoints(br.carLights, uniforms);
+    scene.add(traffic);
+    const pos = traffic.geometry.attributes.position;
+    animators.push((time) => { br.updateTraffic(pos.array, time); pos.needsUpdate = true; });
   }
 
   // Keep the water right below the camera calm (it holds the headline on phones): no boats within 220 m.
@@ -224,8 +230,8 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, envMap });
   scene.add(boats.group);
   addLights(boats.lights, 2);
-  // Two Aquabus ferries in the foreground water, heading along False Creek: nearest open water to a
-  // couple of spots in frame.
+  // Two Aquabus ferries crossing False Creek in the foreground: candidate crossings (bearing/distance
+  // pairs from the camera), keeping the first two whose whole path is open water.
   const findWater = (bearing, dist) => {
     for (let r = 0; r < 120; r += 6) {
       for (let a = 0; a < 360; a += 30) {
@@ -235,15 +241,28 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     }
     return null;
   };
-  const ferrySpots = [
-    { ...findWater(framing.bearing + 8, 260), heading: 2.9 },
-    { ...findWater(framing.bearing - 14, 420), heading: -0.2 },
-  ].filter((f) => f.x !== undefined);
-  for (const f of ferrySpots) {
-    const ab = createAquabus(f, envMap);
-    scene.add(ab.group);
-    addLights(ab.lights, 1);
+  const pathIsWater = (a, b) => {
+    for (let i = 0; i <= 24; i++) if (!isWater(a.x + ((b.x - a.x) * i) / 24, a.y + ((b.y - a.y) * i) / 24)) return false;
+    return true;
+  };
+  const crossings = [
+    [[300, 130], [318, 380]],
+    [[340, 150], [5, 330]],
+    [[290, 220], [325, 430]],
+    [[350, 120], [345, 380]],
+    [[20, 120], [355, 300]],
+  ];
+  const ferrySpots = [];
+  for (const [[ba, da], [bb, db]] of crossings) {
+    if (ferrySpots.length === 2) break;
+    const from = findWater(ba, da), to = findWater(bb, db);
+    if (from && to && pathIsWater(from, to) && Math.hypot(to.x - from.x, to.y - from.y) > 120) ferrySpots.push({ from, to });
   }
+  ferrySpots.forEach((route, i) => {
+    const ab = createAquabus({ ...route, phase: i * 23 }, envMap);
+    scene.add(ab.group);
+    animators.push(ab.update);
+  });
 
   await breathe();
   const dem = terrain === 'dem' ? data.terrain : null;
@@ -331,6 +350,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     timings,
     render: (time) => {
       if (time !== undefined) uniforms.uTime.value = time;
+      for (const animate of animators) animate(uniforms.uTime.value);
       composer.render();
     },
   };

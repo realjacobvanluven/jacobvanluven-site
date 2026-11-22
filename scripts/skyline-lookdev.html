@@ -58,7 +58,7 @@ try {
       tier: params.get('tier') ?? (layout === 'phone' ? 'medium' : 'high'),
     });
     if (params.get('bearing')) s.aim(+params.get('bearing'), +(params.get('pitch') ?? 0)); // comparison views
-    s.render(3.0);
+    s.render(+(params.get('time') ?? 3)); // &time=seconds: animation time for the still
     const png = s.renderer.domElement.toDataURL('image/png');
     let bench = null;
     if (params.get('bench')) {

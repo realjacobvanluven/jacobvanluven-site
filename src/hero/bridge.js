@@ -65,23 +65,37 @@ export function createBridge(line, { isWater = () => false, envMap = null, carSp
   let seed = 31;
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   // Lanes: offsets from the centre line (negative = west = southbound in right-hand traffic).
+  // Each lane has its own speed (m/s), so cars in a lane never overlap.
   const lanes = [
-    { offset: 3.2, dir: 1 }, { offset: 6.6, dir: 1 }, { offset: 9.6, dir: 1 },
-    { offset: -3.2, dir: -1 }, { offset: -6.6, dir: -1 }, { offset: -9.6, dir: -1 },
+    { offset: 3.2, dir: 1, speed: 13.5 }, { offset: 6.6, dir: 1, speed: 15.5 }, { offset: 9.6, dir: 1, speed: 12 },
+    { offset: -3.2, dir: -1, speed: 14 }, { offset: -6.6, dir: -1, speed: 16 }, { offset: -9.6, dir: -1, speed: 12.5 },
   ];
   const cars = [];
-  for (const lane of lanes) {
+  const carLights = [];
+  for (const [li, lane] of lanes.entries()) {
     for (let s = rand() * 20; s < L; s += carSpacing[0] + rand() * (carSpacing[1] - carSpacing[0])) {
-      const t = s / L;
       // Northbound cars show taillights to the camera (south-east of the bridge); southbound show headlights.
       const tail = lane.dir > 0;
       const color = tail ? [5.5, 0.18, 0.08] : [6.5, 6.2, 5.4];
-      for (const k of [-0.8, 0.8]) {
-        const [x, y] = at(t, lane.offset + k);
-        lights.push({ p: [x, deckAt(t) + 0.75, -y], color, size: tail ? 0.35 : 0.45 });
-      }
-      cars.push({ lane: lanes.indexOf(lane), t });
+      cars.push({ lane: li, s0: s });
+      for (let k = 0; k < 2; k++) carLights.push({ p: [0, 0, 0], color, size: tail ? 0.35 : 0.45 });
     }
   }
-  return { group, lights, lanes, cars, length: L, stats: { piers: piers.length, cars: cars.length } };
+
+  /** Writes every car's two light positions for time t (seconds) into a Float32Array (xyz per light). */
+  function updateTraffic(positions, time) {
+    let i = 0;
+    for (const car of cars) {
+      const lane = lanes[car.lane];
+      const s = (((car.s0 + lane.dir * lane.speed * time) % L) + L) % L;
+      const t = s / L;
+      const h = deckAt(t) + 0.75;
+      for (const k of [-0.8, 0.8]) {
+        const [x, y] = at(t, lane.offset + k);
+        positions[i++] = x; positions[i++] = h; positions[i++] = -y;
+      }
+    }
+  }
+
+  return { group, lights, carLights, updateTraffic, lanes, cars, length: L, stats: { piers: piers.length, cars: cars.length } };
 }

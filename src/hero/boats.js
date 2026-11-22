@@ -84,10 +84,15 @@ function rainbowTexture() {
   return tex;
 }
 
-/** An Aquabus: rainbow-striped hull, white canopy, lit cabin windows. */
-export function createAquabus({ x, y, heading }, envMap = null) {
+/**
+ * An Aquabus: rainbow-striped hull, white canopy, lit cabin. Shuttles back and forth between two points
+ * on the water (`from`, `to`, local metres), easing in and out and waiting a few seconds at each end.
+ * Call update(time) every frame.
+ */
+export function createAquabus({ from, to, speed = 4.5, dwell = 6, phase = 0 }, envMap = null) {
   const group = new THREE.Group();
   const L = 11, B = 3.8;
+  const stripes = new THREE.MeshStandardMaterial({ map: rainbowTexture(), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.05, envMap });
   const hull = new THREE.Mesh(
     new THREE.BoxGeometry(L, 1.3, B),
     [
@@ -95,8 +100,8 @@ export function createAquabus({ x, y, heading }, envMap = null) {
       new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }),
       new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.6 }),
       new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }),
-      new THREE.MeshStandardMaterial({ map: rainbowTexture(), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.05, envMap }),
-      new THREE.MeshStandardMaterial({ map: rainbowTexture(), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.05, envMap }),
+      stripes,
+      stripes,
     ],
   );
   hull.position.y = 0.5;
@@ -109,13 +114,31 @@ export function createAquabus({ x, y, heading }, envMap = null) {
   cabin.position.set(-0.6, 1.9, 0);
   const roof = new THREE.Mesh(new THREE.BoxGeometry(L * 0.7, 0.18, B * 0.95), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.6, envMap }));
   roof.position.set(-0.6, 2.75, 0);
-  group.add(hull, bow, cabin, roof);
-  group.rotation.y = heading;
-  group.position.set(x, 0, -y);
-  return {
-    group,
-    lights: [
-      { p: [x, 3.3, -y], color: [4, 4, 4], size: 0.3 },
-    ],
-  };
+  // Masthead light (bright enough to bloom) travels with the boat.
+  const masthead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 5, 4.6) }));
+  masthead.position.set(1.5, 3.4, 0);
+  group.add(hull, bow, cabin, roof, masthead);
+
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const D = Math.hypot(dx, dy);
+  const travel = D / speed;
+  const cycle = 2 * (travel + dwell);
+  const smooth = (t) => t * t * (3 - 2 * t);
+
+  function update(time) {
+    let u = (((time + phase) % cycle) + cycle) % cycle;
+    let k, outbound;
+    if (u < dwell) { k = 0; outbound = true; }
+    else if (u < dwell + travel) { k = smooth((u - dwell) / travel); outbound = true; }
+    else if (u < 2 * dwell + travel) { k = 1; outbound = false; }
+    else { k = 1 - smooth((u - 2 * dwell - travel) / travel); outbound = false; }
+    const x = from.x + dx * k, y = from.y + dy * k;
+    group.position.set(x, 0, -y);
+    // Bow points the way it's going (local +x → heading); a gentle bob on the ripples.
+    const heading = Math.atan2(outbound ? dy : -dy, outbound ? dx : -dx);
+    group.rotation.set(0, heading, Math.sin(time * 1.3 + phase) * 0.015);
+    group.position.y = Math.sin(time * 1.7 + phase) * 0.08;
+  }
+  update(0);
+  return { group, update, lights: [] };
 }
