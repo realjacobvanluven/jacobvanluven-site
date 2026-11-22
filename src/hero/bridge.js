@@ -86,6 +86,8 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
   const concreteParts = batch(concrete);
   const steelParts = batch(steel);
 
+  const lamps = []; // extra light sprites (pylon lanterns, walkway lights)
+
   // ---- Deck, road surface, parapets, girders, fill ---------------------------------------------------
   const N = Math.max(30, Math.ceil(L / 12));
   for (let i = 0; i < N; i++) {
@@ -99,8 +101,19 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
       concreteParts.box(W(tm, side * (S.width / 2 - 0.25), hm + 0.5), [seg, 1.0, 0.5], tilt); // parapet
     }
     if (id === 'granville') {
-      // Deep steel plate girders under the deck.
+      // Deep steel plate girders under the deck, tied together by cross diaphragms.
       for (const g of [-10.5, -4, 4, 10.5]) steelParts.box(W(tm, g, hm - S.depth - 0.7), [seg, 1.5, 0.45], tilt);
+      steelParts.box(W(tm, 0, hm - S.depth - 0.35), [0.5, 0.9, S.width - 2], tilt);
+      steelParts.box(W(tm, 0, hm - S.depth - 1.25), [0.35, 0.35, 22], tilt); // lower bracing strut
+      // Outboard sidewalk and bike path on cantilever brackets, with railings and path lights.
+      for (const side of [-1, 1]) {
+        const off = side * (S.width / 2 + 1.9);
+        concreteParts.box(W(tm, off, hm - 0.55), [seg, 0.5, 3.4], tilt);
+        steelParts.box(W(tm, off, hm - 1.4), [0.45, 0.6, 3.6], tilt); // bracket
+        steelParts.box(W(tm, side * (S.width / 2 + 3.5), hm + 0.35), [seg, 1.1, 0.12], tilt); // railing
+        steelParts.box(W(tm, side * (S.width / 2 + 3.5), hm + 0.9), [seg, 0.1, 0.16], tilt); // handrail
+        if (i % 2 === 0) { const p = W(tm, side * (S.width / 2 + 3.3), hm + 1.5); lamps.push({ p: [p.x, p.y, p.z], color: [3.4, 2.4, 1.3], size: 0.42 }); }
+      }
     } else if (id === 'cambie' && hm > FILL_BELOW) {
       // Box-girder haunch: a deeper centre web.
       concreteParts.box(W(tm, 0, hm - S.depth - 0.8), [seg, 1.6, S.width * 0.45], tilt);
@@ -134,19 +147,30 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
       concreteParts.box(W(t, 0, h - S.depth - 0.6), [3.0, 1.4, S.width * 0.62]);
     }
   } else if (id === 'granville') {
-    // Tall concrete portal piers: column pairs under a cap beam on footings, every ~48 m.
+    // Tall concrete portal piers every ~48 m: tapered column pairs, a mid-height strut and X bracing on the tall
+    // ones, a deep cap beam with bearing pads under each girder, on wide footings.
     for (const t of pierTs(48)) {
-      const h = deckAt(t);
-      for (const side of [-1, 1]) column(t, side * 8.2, 2.6, h - 1.2, 2.2);
-      concreteParts.box(W(t, 0, h - S.depth - 1.6), [2.8, 2.4, S.width * 0.74]);
-      if (h > 12) { // knee braces between the columns, as on the real portal frames
-        for (const side of [-1, 1]) steelParts.bar(W(t, side * 8.2, h - S.depth - 3), W(t, side * 3.2, h - S.depth - 1), 0.5);
+      const h = deckAt(t), top = h - S.depth - 1.6;
+      for (const side of [-1, 1]) {
+        const x = side * 8.2;
+        concreteParts.box(W(t, x, 0.3), [5.4, 1.2, 4.6]); // footing
+        concreteParts.box(W(t, x, top * 0.2 + 0.6), [3.6, top * 0.4, 3.2]); // flared base
+        concreteParts.box(W(t, x, top * 0.6 + 0.6), [2.6, top * 0.8 + 0.2, 2.2]); // shaft
+        piers++;
       }
+      if (h > 13) {
+        concreteParts.box(W(t, 0, top * 0.55), [2.2, 1.5, 16.4]); // mid-height strut
+        for (const side of [-1, 1]) {
+          steelParts.bar(W(t, side * 8.2, top * 0.15), W(t, -side * 8.2, top * 0.55), 0.55); // X bracing
+          steelParts.bar(W(t, side * 8.2, top * 0.55), W(t, -side * 8.2, top * 0.95), 0.55);
+        }
+      }
+      concreteParts.box(W(t, 0, h - S.depth - 1.6), [3.4, 2.6, S.width * 0.8]); // cap beam
+      for (const g of [-10.5, -4, 4, 10.5]) steelParts.box(W(t, g, h - S.depth - 0.25), [1.0, 0.4, 0.9]); // bearing pads
     }
   }
 
   // ---- Burrard: steel through-truss spans between pylon gateways --------------------------------------
-  const lamps = [];
   const trussT0 = Math.max(0.05, tw0 - 0.05), trussT1 = Math.min(0.95, tw1 + 0.05);
   const lampPos = (p) => [p.x, p.y, p.z];
   if (id === 'burrard') {
