@@ -11,9 +11,14 @@ const hdr = (r, g, b, k) => new THREE.Color(r * k, g * k, b * k);
 /** BC Place: oval bowl, cable-supported fabric roof, 36 masts and the orange LED ring. */
 export function bcPlace({ center, angle, a, b }, envMap) {
   const group = new THREE.Group();
-  const wallH = 32, roofRise = 24;
+  const wallH = 32, roofRise = 7;
   const rx = a * 0.97, rz = b * 0.97;
 
+  const OCULUS = 0.4; // central opening, as an angle on a 0..PI/2 scale from the roof's crown to its rim
+  // The roof is a shallow, almost straight-sided saucer: fabric sloping up from the rim to a raised ring around the opening.
+  const uo = OCULUS / (Math.PI / 2); // opening radius as a fraction of the rim radius
+  const capR = (h) => h / (Math.PI / 2); // radius fraction at a position on the 0..PI/2 scale
+  const capY = (h) => wallH + (roofRise * (1 - capR(h))) / (1 - uo); // height there
   const wall = new THREE.Mesh(
     new THREE.CylinderGeometry(1, 1.04, wallH, 96, 1, true),
     new THREE.MeshStandardMaterial({
@@ -35,14 +40,14 @@ export function bcPlace({ center, angle, a, b }, envMap) {
   group.add(band);
 
   const roof = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 96, 20, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.CylinderGeometry(uo, 1, roofRise, 96, 1, true),
     new THREE.MeshStandardMaterial({
-      color: 0xf4f5f7, roughness: 0.95, metalness: 0.0, envMap, envMapIntensity: 0.25,
+      side: THREE.DoubleSide, color: 0xf4f5f7, roughness: 0.95, metalness: 0.0, envMap, envMapIntensity: 0.25,
       emissive: new THREE.Color(0.16, 0.155, 0.15), // white fabric, glowing softly from the lit stadium inside
     }),
   );
-  roof.scale.set(rx * 0.96, roofRise, rz * 0.96);
-  roof.position.y = wallH;
+  roof.scale.set(rx * 0.96, 1, rz * 0.96);
+  roof.position.y = wallH + roofRise / 2;
   group.add(roof);
 
   // Masts around the rim, leaning slightly outward.
@@ -59,12 +64,79 @@ export function bcPlace({ center, angle, a, b }, envMap) {
     const x = Math.cos(t) * rx * 1.01, z = Math.sin(t) * rz * 1.01;
     const out = new THREE.Vector3(x, 0, z).normalize();
     q.setFromAxisAngle(new THREE.Vector3(-out.z, 0, out.x), 0.1);
-    const p = new THREE.Vector3(x, wallH - 8 + mastH / 2, z);
-    m.compose(p, q, s);
+    const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    const base = new THREE.Vector3(x, wallH - 8, z); // masts start part-way up the wall, not at the ground
+    m.compose(base.clone().addScaledVector(axis, mastH / 2), q, s); // foot on the wall, head at mastH
     mastMesh.setMatrixAt(i, m);
-    tops.push(new THREE.Vector3(0, mastH / 2, 0).applyQuaternion(q).add(p));
+    tops.push(base.addScaledVector(axis, mastH));
   }
   group.add(mastMesh);
+
+  // Point on the roof surface (slightly proud of it) at azimuth t and polar angle phi.
+  const roofPt = (t, phi, lift = 1.012) => new THREE.Vector3(
+    Math.cos(t) * rx * 0.96 * capR(phi) * lift, capY(phi) + 0.15 + (lift - 1) * 20, Math.sin(t) * rz * 0.96 * capR(phi) * lift);
+  const seg = [], ribs = [];
+  const addSeg = (arr, a, b) => arr.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  const ringsAt = [0.62, 0.92, 1.2];
+  for (let i = 0; i < masts; i++) {
+    const t = (i / masts) * Math.PI * 2, top = tops[i];
+    // Forestays: fan from each mast head down to the fabric at three radii, spread across neighbouring panels.
+    for (const [phi, dt] of [[0.62, -0.5], [0.62, 0.5], [0.95, 0], [1.2, -0.3], [1.2, 0.3], [0.78, 0]]) {
+      addSeg(seg, top, roofPt(t + dt * (Math.PI * 2 / masts), phi));
+    }
+    // Radial seams between fabric panels, rim to opening, midway between masts.
+    const tm = t + Math.PI / masts;
+    let prev = roofPt(tm, Math.PI / 2 - 0.02);
+    for (let k = 1; k <= 10; k++) {
+      const cur = roofPt(tm, Math.PI / 2 - 0.02 - (k / 10) * (Math.PI / 2 - 0.02 - OCULUS));
+      addSeg(ribs, prev, cur); prev = cur;
+    }
+  }
+  // Concentric cable rings around the roof.
+  for (const phi of [0.62, 0.95, 1.22, 1.45]) {
+    for (let i = 0; i < 96; i++) addSeg(ribs, roofPt((i / 96) * Math.PI * 2, phi), roofPt(((i + 1) / 96) * Math.PI * 2, phi));
+  }
+  const lines = (arr, color, opacity) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+    return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
+  };
+  group.add(lines(seg, 0xdfe3ea, 0.85));
+  group.add(lines(ribs, 0x8d939c, 0.55));
+
+  // Mast-head caps with a small steady light.
+  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.9, 8, 6), new THREE.MeshBasicMaterial({ color: hdr(1, 0.85, 0.6, 1.6) }), masts);
+  tops.forEach((p, i) => { m.compose(p, q.identity(), s); caps.setMatrixAt(i, m); });
+  group.add(caps);
+
+  // Compression ring around the central opening, and the dark void inside it.
+  const oc = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.012, 8, 96),
+    new THREE.MeshStandardMaterial({ color: 0xcfd4db, roughness: 0.4, metalness: 0.5, envMap, emissive: new THREE.Color(0.08, 0.08, 0.09) }),
+  );
+  oc.rotation.x = Math.PI / 2;
+  oc.scale.set(rx * 0.96 * capR(OCULUS), rz * 0.96 * capR(OCULUS), 1);
+  oc.position.y = capY(OCULUS) + 0.2;
+  oc.scale.z = 90; // thicken the tube (torus tube scales with Z after the rotation)
+  group.add(oc);
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 64),
+    new THREE.MeshBasicMaterial({ color: hdr(1, 0.8, 0.55, 0.9) }), // lit stadium bowl seen through the opening
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.scale.set(rx * 0.96 * capR(OCULUS), rz * 0.96 * capR(OCULUS), 1);
+  glow.position.y = wallH + 6;
+  group.add(glow);
+
+  // Rim beam: the steel ring where the fabric meets the wall.
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.012, 6, 128),
+    new THREE.MeshStandardMaterial({ color: 0xb9bec7, roughness: 0.45, metalness: 0.5, envMap }),
+  );
+  rim.rotation.x = Math.PI / 2;
+  rim.scale.set(rx * 0.97, rz * 0.97, 60);
+  rim.position.y = wallH + 0.2;
+  group.add(rim);
 
   // The orange LED ring along the roof edge.
   const ringPts = [];
@@ -72,17 +144,35 @@ export function bcPlace({ center, angle, a, b }, envMap) {
     const t = (i / 128) * Math.PI * 2;
     ringPts.push(new THREE.Vector3(Math.cos(t) * rx * 1.005, wallH + 0.6, Math.sin(t) * rz * 1.005));
   }
-  const ring = new THREE.Mesh(
-    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ringPts, true), 256, 0.9, 6, true),
-    new THREE.MeshBasicMaterial({ color: hdr(1, 0.42, 0.08, 5) }),
-  );
+  const ringGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ringPts, true), 256, 0.9, 6, true);
+  const ringCols = new Float32Array(ringGeo.attributes.position.count * 3);
+  ringGeo.setAttribute('color', new THREE.BufferAttribute(ringCols, 3));
+  const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ vertexColors: true }));
   group.add(ring);
+
+  // Like the real stadium, the ring runs through colours: a slow wave of hues travelling around the bowl.
+  const palette = [[1, 0.42, 0.08], [1, 0.1, 0.1], [0.9, 0.1, 0.7], [0.5, 0.2, 1], [0.1, 0.3, 1], [0.1, 0.8, 1], [0.15, 1, 0.45], [1, 0.8, 0.3]];
+  const ringColor = (u, out) => {
+    const f = (((u % 1) + 1) % 1) * palette.length, i = Math.floor(f), k = f - i;
+    const c0 = palette[i % palette.length], c1 = palette[(i + 1) % palette.length], e = k * k * (3 - 2 * k);
+    out[0] = c0[0] + (c1[0] - c0[0]) * e; out[1] = c0[1] + (c1[1] - c0[1]) * e; out[2] = c0[2] + (c1[2] - c0[2]) * e;
+  };
+  const tmp = [0, 0, 0], perRing = 7, segs = 257, gain = 3.6;
+  const colorAttr = ringGeo.attributes.color;
+  const update = (time) => {
+    for (let i = 0; i < segs; i++) {
+      ringColor(time * 0.035 + (i / (segs - 1)) * 1.5, tmp); // ~29 s for a full cycle; 1.5 cycles around the ring
+      for (let j = 0; j < perRing; j++) colorAttr.setXYZ(i * perRing + j, tmp[0] * gain, tmp[1] * gain, tmp[2] * gain);
+    }
+    colorAttr.needsUpdate = true;
+  };
+  update(0);
 
   group.rotation.y = angle; // footprint long axis (local x→y rotation maps to world -Z, so same sign)
   group.position.set(center[0], 0, -center[1]);
   group.updateMatrixWorld(true);
   const mastLights = tops.map((p) => p.applyMatrix4(group.matrixWorld));
-  return { group, mastLights };
+  return { group, mastLights, update };
 }
 
 /** Harbour Centre: concrete shaft, the lookout "saucer" with a lit window ring, antenna and beacon. */

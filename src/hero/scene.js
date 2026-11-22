@@ -209,9 +209,11 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const addLights = (list, priority) => list.forEach((l) => lights.push({ ...l, priority }));
   addLights(signatures.crownLights, 0);
 
+  let bcUpdate = null;
   if (L.bcPlace) {
     const bc = bcPlace(L.bcPlace, envMap);
     scene.add(bc.group);
+    bcUpdate = bc.update;
     addLights(bc.mastLights.map((v) => ({ p: [v.x, v.y, v.z], color: [5, 5, 5.5], size: 0.5 })), 1);
   }
   if (L.harbourCentre) {
@@ -261,6 +263,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
 
   let bridgeStats = null;
   const animators = []; // (time) => void, run before every frame
+  if (bcUpdate) animators.push(bcUpdate);
 
   // Street life: lamps along the downtown streets, traffic on the main roads.
   const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing });
