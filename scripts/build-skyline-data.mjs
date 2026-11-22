@@ -12,7 +12,7 @@
  *  - Terrain: AWS Terrarium tiles, built from NRCan CDEM in Canada (Open Government Licence – Canada).
  *  City data: Open Government Licence – Vancouver. OSM: © OpenStreetMap contributors, ODbL.
  *  Also precomputed here (so the browser doesn't have to): the land/water mask, North Shore terrain grid,
- *  the Cambie Bridge line, marina docks and moored-boat positions.
+ *  the Cambie, Granville and Burrard Bridge lines, marina docks and moored-boat positions.
  *
  * How a building is chosen (per 2015 footprint)
  *  1. If 2009 parts cover most of it, the building existed in 2009: use those stepped parts.
@@ -264,6 +264,16 @@ function osmExtras() {
 out tags geom;`);
 }
 
+/** Granville and Burrard Street Bridge decks (main spans only), by OSM way id. */
+const BRIDGE_WAYS = {
+  granville: [1419040127, 1419040128, 1419040129],
+  burrard: [849900149, 23188868],
+};
+function osmBridges() {
+  const ids = Object.values(BRIDGE_WAYS).flat().join(',');
+  return overpass('osm-bridges.json', `[out:json][timeout:60];way(id:${ids});out tags geom;`);
+}
+
 // ---- Parsing ----------------------------------------------------------------------------------------
 function cityRings(fc, withHeight) {
   const out = [];
@@ -309,6 +319,7 @@ function osmRings(el) {
 // ---- Build ------------------------------------------------------------------------------------------
 const [fc2015, fc2009, osmData] = await Promise.all([cityFootprints(2015), cityFootprints(2009), osm()]);
 const extras = await osmExtras();
+const bridgeEls = await osmBridges();
 const roadsData = await osmRoads();
 const railData = await osmRail();
 const groundData = await osmGround();
@@ -580,20 +591,22 @@ for (let r = 0; r < terrain.rows; r++) {
   terrainRows.push(row);
 }
 
-// Cambie Bridge: principal axis of all its roadway points → one straight line (it is nearly straight).
-const bridgePts = extras.elements
-  .filter((e) => e.type === 'way' && /^Cambie (Street )?Bridge/.test(e.tags?.name ?? '') && e.geometry)
-  .flatMap((e) => e.geometry.map((p) => toLocal([p.lon, p.lat])));
-let bridge = null;
-if (bridgePts.length > 1) {
-  const cx = bridgePts.reduce((s, p) => s + p[0], 0) / bridgePts.length, cy = bridgePts.reduce((s, p) => s + p[1], 0) / bridgePts.length;
+// Bridges: principal axis of each bridge's roadway points → one straight line (all are nearly straight).
+function axisLine(pts) {
+  if (pts.length < 2) return null;
+  const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
   let sxx = 0, syy = 0, sxy = 0;
-  for (const [x, y] of bridgePts) { sxx += (x - cx) ** 2; syy += (y - cy) ** 2; sxy += (x - cx) * (y - cy); }
+  for (const [x, y] of pts) { sxx += (x - cx) ** 2; syy += (y - cy) ** 2; sxy += (x - cx) * (y - cy); }
   const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
-  const proj = bridgePts.map(([x, y]) => (x - cx) * ux + (y - cy) * uy);
+  const proj = pts.map(([x, y]) => (x - cx) * ux + (y - cy) * uy);
   const t0 = Math.min(...proj), t1 = Math.max(...proj);
-  bridge = [[cx + ux * t0, cy + uy * t0], [cx + ux * t1, cy + uy * t1]];
+  return [[cx + ux * t0, cy + uy * t0], [cx + ux * t1, cy + uy * t1]];
 }
+const wayPoints = (els) => els.filter((e) => e.type === 'way' && e.geometry).flatMap((e) => e.geometry.map((p) => toLocal([p.lon, p.lat])));
+const bridges = [
+  { id: 'cambie', line: axisLine(wayPoints(extras.elements.filter((e) => /^Cambie (Street )?Bridge/.test(e.tags?.name ?? '')))) },
+  ...Object.entries(BRIDGE_WAYS).map(([id, ways]) => ({ id, line: axisLine(wayPoints(bridgeEls.elements.filter((e) => ways.includes(e.id)))) })),
+].filter((b) => b.line).map((b) => ({ id: b.id, line: b.line.map((p) => p.map(dm)) }));
 
 // Docks and moored boats: boats side by side, perpendicular to each dock, wherever the water mask says water.
 let seed = 4242;
@@ -640,7 +653,8 @@ const data = {
   shoreline: shore,
   waterMask: { ...MASK, width: mask.width, height: mask.height, rows: mask.rows },
   terrain: { ...TERRAIN, cols: terrain.cols, rows: terrain.rows, source: 'AWS Terrarium tiles (NRCan CDEM)', heights: terrainRows },
-  bridge: bridge && bridge.map((p) => p.map(dm)),
+  // [{ id, line: [[xDm, yDm], [xDm, yDm]] }]: straight deck axes of the Cambie, Granville and Burrard Bridges
+  bridges,
   docks: docks.map(encodeRing),
   // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
   boats,
@@ -669,7 +683,7 @@ console.log('Kept in view:', kept.length, 'prisms', bySrc);
 console.log('Tallest:', kept.sort((a, b) => b.h - a.h).slice(0, 8).map((o) => `${o.h.toFixed(0)}m(${o.src})`).join(', '));
 console.log('Landmarks:', Object.keys(landmarkOut).join(', '));
 const part = (k) => `${k} ${(gzipSync(JSON.stringify(data[k])).length / 1024).toFixed(0)} KB`;
-console.log('Extras:', `mask ${mask.width}×${mask.height},`, `terrain ${terrain.cols}×${terrain.rows} (max ${terrain.max} m, ${terrain.tiles} tiles),`, `bridge ${bridge ? 'yes' : 'no'},`, `${docks.length} docks, ${boats.length} boats`);
+console.log('Extras:', `mask ${mask.width}×${mask.height},`, `terrain ${terrain.cols}×${terrain.rows} (max ${terrain.max} m, ${terrain.tiles} tiles),`, `bridges ${bridges.map((b) => b.id).join('/')},`, `${docks.length} docks, ${boats.length} boats`);
 console.log('Gzipped parts:', ['buildings', 'waterMask', 'terrain', 'shoreline', 'docks', 'boats', 'signatures', 'roads', 'paths', 'greens', 'trees'].map(part).join(', '));
 console.log('Signatures:', signatures.map((s) => s.id).join(', '), '| roads:', roads.length, '| paths:', paths.length, '| greens:', greens.length, '| trees:', treePts.length);
 console.log(`Wrote ${OUT}: ${(json.length / 1024).toFixed(0)} KB, ${(gzipSync(json).length / 1024).toFixed(0)} KB gzipped`);

@@ -97,7 +97,7 @@ export async function loadSkyline(url) {
     shoreline: raw.shoreline.map((l) => decodeRing(l)),
     waterMask: decodeWaterMask(raw.waterMask),
     terrain: decodeTerrain(raw.terrain),
-    bridge: raw.bridge?.map((p) => p.map((v) => v / 10)) ?? null,
+    bridges: (raw.bridges ?? []).map((b) => ({ id: b.id, line: b.line.map((p) => p.map((v) => v / 10)) })),
     docks: (raw.docks ?? []).map((l) => decodeRing(l)),
     boats: (raw.boats ?? []).map(([x, y, a, len, kind]) => ({ x: x / 10, y: y / 10, heading: (a / 1800) * Math.PI, length: len / 10, sail: kind === 1 })),
     signatures: (raw.signatures ?? []).map((sg) => ({ id: sg.id, height: sg.height, ring: decodeRing(sg.ring) })),

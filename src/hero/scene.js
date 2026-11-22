@@ -261,7 +261,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.add(waterfront.group);
   addLights(waterfront.lamps, 2);
 
-  let bridgeStats = null;
+  const bridgeStats = [];
   const animators = []; // (time) => void, run before every frame
   if (bcUpdate) animators.push(bcUpdate);
 
@@ -276,11 +276,12 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     const sp = streetTraffic.geometry.attributes.position;
     animators.push((time) => { streets.updateTraffic(sp.array, time); sp.needsUpdate = true; });
   }
-  if (data.bridge) {
-    const br = createBridge(data.bridge, { isWater, envMap });
+  // Cambie, Granville and Burrard Bridges, up False Creek to the west.
+  for (const spec of data.bridges) {
+    const br = createBridge(spec, { isWater, envMap });
     scene.add(br.group);
     addLights(br.lights, 0);
-    bridgeStats = br.stats;
+    bridgeStats.push(br.stats);
     // Moving traffic: its own light layer, positions rewritten each frame.
     const traffic = createLightPoints(br.carLights, uniforms);
     scene.add(traffic);
