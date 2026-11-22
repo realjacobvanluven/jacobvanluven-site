@@ -35,3 +35,6 @@ scripts/.cache/
 
 # private source material (never published)
 private/
+
+# Claude Code personal settings
+.claude/settings.local.json
