@@ -269,9 +269,18 @@ const BRIDGE_WAYS = {
   granville: [1419040127, 1419040128, 1419040129],
   burrard: [849900149, 23188868],
 };
+/** Granville's south approach and its two ramps, as OSM way chains (each oriented to continue from the last). */
+const RAMP_CHAINS = [
+  // Granville Street south of the bridge, a raised deck that comes down to street level at 6th Avenue.
+  { id: 'approach', bridge: 'granville', kind: 'down', width: 22, ids: [1419040137, 1419040132, 1419040138, 1419040133, 1285848467, 256879265], near: 'main-start', joinMain: true },
+  // Off-ramp curving away west toward Fir Street and 4th Avenue.
+  { id: 'offramp', bridge: 'granville', kind: 'down', width: 10, ids: [1419040135, 1419040136, 992936499, 35354235], near: 'main-start' },
+  // On-ramp climbing from the south-east to merge with the approach.
+  { id: 'onramp', bridge: 'granville', kind: 'up', width: 9, ids: [304881410, 1419040130, 1419040131, 37226820], near: [-2043, -590] },
+];
 function osmBridges() {
-  const ids = Object.values(BRIDGE_WAYS).flat().join(',');
-  return overpass('osm-bridges.json', `[out:json][timeout:60];way(id:${ids});out tags geom;`);
+  const ids = [...Object.values(BRIDGE_WAYS).flat(), ...RAMP_CHAINS.flatMap((r) => r.ids)].join(',');
+  return overpass('osm-bridges-2.json', `[out:json][timeout:60];way(id:${ids});out tags geom;`);
 }
 
 // ---- Parsing ----------------------------------------------------------------------------------------
@@ -608,6 +617,22 @@ const bridges = [
   ...Object.entries(BRIDGE_WAYS).map(([id, ways]) => ({ id, line: axisLine(wayPoints(bridgeEls.elements.filter((e) => ways.includes(e.id)))) })),
 ].filter((b) => b.line).map((b) => ({ id: b.id, line: b.line.map((p) => p.map(dm)) }));
 
+// Ramps: chain each way list into one polyline, oriented to start nearest its `near` point.
+const ramps = RAMP_CHAINS.map((r) => {
+  const main = bridges.find((b) => b.id === r.bridge).line.map((p) => p.map((v) => v / 10)); // [[x,y],[x,y]] south → north, metres
+  const near = r.near === 'main-start' ? main[0] : r.near;
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const pts = [];
+  r.ids.forEach((id, i) => {
+    let g = bridgeEls.elements.find((e) => e.id === id).geometry.map((p) => toLocal([p.lon, p.lat]));
+    const ref = i === 0 ? near : pts[pts.length - 1];
+    if (d(g[g.length - 1], ref) < d(g[0], ref)) g = g.reverse();
+    pts.push(...(i === 0 ? g : g.slice(1)));
+  });
+  if (r.joinMain) pts.unshift(main[0]); // starts at the end of the main deck
+  return { id: r.id, bridge: r.bridge, kind: r.kind, width: r.width, line: pts.map((p) => p.map(dm)) };
+});
+
 // Docks and moored boats: boats side by side, perpendicular to each dock, wherever the water mask says water.
 let seed = 4242;
 const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -655,6 +680,8 @@ const data = {
   terrain: { ...TERRAIN, cols: terrain.cols, rows: terrain.rows, source: 'AWS Terrarium tiles (NRCan CDEM)', heights: terrainRows },
   // [{ id, line: [[xDm, yDm], [xDm, yDm]] }]: straight deck axes of the Cambie, Granville and Burrard Bridges
   bridges,
+  // [{ id, bridge, kind: 'down' (leaves the deck, descends) | 'up' (climbs to merge), width, line: [[xDm, yDm]…] }]
+  ramps,
   docks: docks.map(encodeRing),
   // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
   boats,

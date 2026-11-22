@@ -116,6 +116,12 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   departures (climbing out north-west). The harbour is hidden behind the towers, so planes drop out of sight behind the skyline
   as they land. Hand-placed approximate paths, jittered per flight. Scenery only, no hotspot. `&plane=arrival:0.4` in the lookdev
   page freezes one for a still.
+- **Bridges (2026-11-22):** `src/hero/bridge.js` builds the **Cambie, Granville Street and Burrard Street Bridges** from their
+  OSM axes (`bridges` in the data file; `scripts/build-skyline-data.mjs`). Each ramps down to street level at both ends and
+  carries lamps and per-lane traffic. Burrard has arched steel trusses between stepped Art Deco pylons; Granville has steel
+  plate girders on X-braced concrete portal piers, outboard sidewalks, and its raised south approach plus off-/on-ramps
+  (`ramps` in the data, chained from OSM ways). Structure and heights are approximate. The building crop now reaches 252°
+  (the pan limit) so the west bank around the bridges has buildings. Scenery only, no hotspots.
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange
   stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
   (`summary` prop in `src/pages/index.astro`), then the headline and subheading.

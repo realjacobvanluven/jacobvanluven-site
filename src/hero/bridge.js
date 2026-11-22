@@ -7,7 +7,8 @@ import * as THREE from 'three';
  *    piers (pairs of columns under a cap beam, on footings), with long-arm cobra lamps.
  *  - Burrard Street Bridge: three steel through-truss spans with arched top chords and outboard sidewalks,
  *    between stepped Art Deco concrete pylon gateways topped with lanterns, on concrete approach spans.
- * Every deck ramps down to street level at both ends (on fill where it is low) and runs a short way onto land,
+ * Granville's raised south approach (down Granville Street), its off-ramp toward Fir Street and 4th Avenue and its
+ * on-ramp from the south-east follow the OSM road lines. Every deck ramps down to street level at both ends (on fill where it is low) and runs a short way onto land,
  * so none of them stops in mid-air. All carry lamp standards and per-lane streams of car lights (white
  * headlights toward the camera, red taillights away). Heights and structure are approximate.
  */
@@ -18,6 +19,7 @@ const SPECS = {
   burrard: { width: 21, depth: 1.8, endH: 1, mainH: 15, ramp: 200, lampH: 8, pier: 'portal', laneCount: 2, speeds: [11, 13] },
 };
 const APPROACH = 50; // m of road beyond each mapped end, at street level
+const GRANVILLE_SOUTH_H = 17; // m: Granville's south end stays high; its approach ramp carries it down to the street
 const FILL_BELOW = 6; // m: decks lower than this sit on solid fill instead of piers
 
 export function createBridge(spec, { isWater = () => false, envMap = null, carSpacing = [10, 34] } = {}) {
@@ -26,8 +28,10 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
   let [[sx, sy], [nx, ny]] = line[0][1] < line[1][1] ? line : [line[1], line[0]]; // south → north
   const L0 = Math.hypot(nx - sx, ny - sy);
   const ux = (nx - sx) / L0, uy = (ny - sy) / L0;
-  sx -= ux * APPROACH; sy -= uy * APPROACH; nx += ux * APPROACH; ny += uy * APPROACH; // road continues onto land
-  const L = L0 + 2 * APPROACH;
+  const southHigh = id === 'granville'; // its south end hands over to the approach ramp instead of descending
+  const extS = southHigh ? 0 : APPROACH;
+  sx -= ux * extS; sy -= uy * extS; nx += ux * APPROACH; ny += uy * APPROACH; // road continues onto land
+  const L = L0 + extS + APPROACH;
   const rx = uy, ry = -ux; // right of northbound travel
   const at = (t, side = 0) => [sx + ux * L * t + rx * side, sy + uy * L * t + ry * side];
   const heading = Math.atan2(uy, ux);
@@ -43,8 +47,12 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
   // Deck height (m above the water): at street level at each end, rising to the main level over S.ramp metres.
   const smooth = (v) => { const k = Math.min(1, Math.max(0, v)); return k * k * (3 - 2 * k); };
   const deckAt = (t) => {
-    const s = Math.min(t, 1 - t) * L;
-    let h = S.endH + (S.mainH - S.endH) * smooth((s - APPROACH * 0.6) / S.ramp);
+    const sN = (1 - t) * L, sS = t * L;
+    const hN = S.endH + (S.mainH - S.endH) * smooth((sN - APPROACH * 0.6) / S.ramp);
+    const hS = southHigh
+      ? GRANVILLE_SOUTH_H + (S.mainH - GRANVILLE_SOUTH_H) * smooth(sS / 140)
+      : S.endH + (S.mainH - S.endH) * smooth((sS - APPROACH * 0.6) / S.ramp);
+    let h = Math.min(hN, hS);
     if (id === 'cambie') h += 1.2 * Math.sin(Math.PI * Math.min(1, Math.max(0, (t - tw0) / Math.max(0.01, tw1 - tw0)))); // slight hump over the water
     return h;
   };
@@ -62,8 +70,8 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
     const items = [];
     return {
       /** Box centred at c, with local axes: x along the bridge, y up, z across; size = [along, up, across]. */
-      box(c, size, tilt = 0) {
-        q.setFromEuler(e.set(0, heading, tilt, 'YXZ'));
+      box(c, size, tilt = 0, hd = heading) {
+        q.setFromEuler(e.set(0, hd, tilt, 'YXZ'));
         items.push(new THREE.Matrix4().compose(c.clone(), q.clone(), v3.set(...size).clone()));
       },
       /** Slender member from p0 to p1 with a square section. */
@@ -135,7 +143,7 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
   /** Pier positions: every `step` metres from each end's fill, only where the deck is high enough. */
   const pierTs = (step) => {
     const out = [];
-    for (let s = APPROACH + step * 0.5; s < L - APPROACH; s += step) if (deckAt(s / L) > FILL_BELOW) out.push(s / L);
+    for (let s = (southHigh ? 0 : APPROACH) + step * 0.5; s < L - APPROACH; s += step) if (deckAt(s / L) > FILL_BELOW) out.push(s / L);
     return out;
   };
 
@@ -243,6 +251,85 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
     });
   }
 
+  const poleList = []; // lamp poles collected for the ramps
+  let seed0 = 77;
+  const rand0 = () => ((seed0 = (seed0 * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+  // ---- Granville's south approach and ramps (OSM polylines) ------------------------------------------
+  const rampCarDefs = [];
+  const paths = {};
+  /** Polyline helper: position and heading at distance s along it. */
+  const makePath = (pts) => {
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = cum[cum.length - 1];
+    const pathAt = (dist) => {
+      const d = Math.min(total, Math.max(0, dist));
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < d) i++;
+      const k = (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1);
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+      return { x: x0 + dx * k, y: y0 + dy * k, ux: dx / len, uy: dy / len };
+    };
+    return { total, pathAt };
+  };
+  for (const r of spec.ramps ?? []) {
+    if (r.bridge !== id || r.line.length < 2) continue;
+    const path = makePath(r.line);
+    const w = r.width, dpt = 1.5; // deck width and thickness
+    let hOf;
+    if (r.kind === 'down') {
+      const h0 = deckAt(0) - 0.15;
+      hOf = (d) => h0 - (h0 - S.endH) * (d / path.total);
+    } else {
+      // Climbs from street level to meet the approach deck beside its far end.
+      const end = path.pathAt(path.total), host = paths.approach;
+      let target = 12;
+      if (host) {
+        let best = Infinity;
+        for (let d = 0; d <= host.path.total; d += 4) { const p = host.path.pathAt(d); const dd = Math.hypot(p.x - end.x, p.y - end.y); if (dd < best) { best = dd; target = host.hOf(d) - 0.3; } }
+      }
+      hOf = (d) => S.endH + (target - S.endH) * (d / path.total);
+    }
+    paths[r.id] = { path, hOf };
+    const steps = Math.max(3, Math.ceil(path.total / 12));
+    for (let k = 0; k < steps; k++) {
+      const d0 = (k / steps) * path.total, d1 = ((k + 1) / steps) * path.total, dm_ = (d0 + d1) / 2;
+      const a = path.pathAt(d0), b = path.pathAt(d1), c = path.pathAt(dm_);
+      const run = Math.hypot(b.x - a.x, b.y - a.y) || 0.01, h0 = hOf(d0), h1 = hOf(d1), hm = (h0 + h1) / 2;
+      const hd = Math.atan2(b.y - a.y, b.x - a.x), tilt = Math.atan2(h1 - h0, run), seg = Math.hypot(run, h1 - h0) + 0.15;
+      const P = (side, y) => new THREE.Vector3(c.x + c.uy * side, y, -(c.y - c.ux * side)); // side: + = right of travel
+      concreteParts.box(P(0, hm - dpt / 2), [seg, dpt, w], tilt, hd);
+      roadParts.box(P(0, hm + 0.04), [seg, 0.12, w - 1.6], tilt, hd);
+      for (const side of [-1, 1]) concreteParts.box(P(side * (w / 2 - 0.25), hm + 0.5), [seg, 1.0, 0.45], tilt, hd);
+      if (hm < FILL_BELOW) {
+        if (hm - dpt > -0.3) concreteParts.box(P(0, (hm - dpt) / 2 - 0.2), [seg, hm - dpt + 0.4, w - 1], 0, hd);
+      } else if (k % 2 === 1) {
+        // Single-column bent under the deck every ~24 m, with a cap beam; paired columns under the wide approach.
+        const cols = w > 15 ? [-5.5, 5.5] : [0];
+        for (const off of cols) {
+          concreteParts.box(P(off, (hm - dpt) / 2 - 0.4), [2.0, hm - dpt + 0.8, 2.0], 0, hd);
+          concreteParts.box(P(off, 0.3), [3.4, 1.0, 3.4], 0, hd);
+          piers++;
+        }
+        concreteParts.box(P(0, hm - dpt - 0.6), [2.2, 1.2, w * 0.8], 0, hd);
+      }
+      if (k % 3 === 1) { // lamp standard with an arm reaching over the road, alternating sides
+        const side = k % 2 ? 1 : -1, edge = side * (w / 2 - 0.4);
+        poleList.push({ pos: P(edge, hm + 4.5), size: [0.3, 9, 0.3], hd });
+        poleList.push({ pos: P(edge - side * 1.0, hm + 9), size: [0.28, 0.28, 2.2], hd });
+        const lp = P(edge - side * 2.0, hm + 8.8);
+        lamps.push({ p: [lp.x, lp.y, lp.z], color: [6, 4.2, 2.4], size: 0.75 });
+      }
+    }
+    // Traffic: the approach carries both directions; the ramps are one-way.
+    const dirs = r.id === 'approach' ? [[1, 2.2], [1, 5.6], [-1, -2.2], [-1, -5.6]] : [[1, -2.0], [1, 2.0]];
+    dirs.forEach(([dir, off], li) => {
+      const speed = 9 + li * 1.7 + (r.id === 'approach' ? 2 : 0);
+      for (let s0 = rand0() * 25; s0 < path.total; s0 += 14 + rand0() * 26) rampCarDefs.push({ id: r.id, path, hOf, dir, off, speed, s0 });
+    });
+  }
+
   deckParts.finish(); roadParts.finish(); concreteParts.finish(); steelParts.finish();
 
   // ---- Lamp standards (pole, arm and light) and traffic ----------------------------------------------
@@ -258,6 +345,7 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
       lights.push({ p: [p.x, p.y, p.z], color: [6, 4.2, 2.4], size: 0.8 });
     }
   }
+  for (const pl of poleList) poles.box(pl.pos, pl.size, 0, pl.hd);
   poles.finish();
 
   // Camera sits at the origin: lanes heading toward it show headlights, those heading away show taillights.
@@ -283,6 +371,14 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
     }
   }
 
+  // Ramp traffic: headlights for cars driving toward the camera (at the origin), taillights otherwise.
+  for (const c of rampCarDefs) {
+    const p = c.path.pathAt(c.s0);
+    const toward = (c.dir * p.ux) * -p.x + (c.dir * p.uy) * -p.y > 0;
+    c.toward = toward;
+    for (let k = 0; k < 2; k++) carLights.push({ p: [0, 0, 0], color: toward ? [6.5, 6.2, 5.4] : [5.5, 0.18, 0.08], size: toward ? 0.45 : 0.35 });
+  }
+
   /** Writes every car's two light positions for time t (seconds) into a Float32Array (xyz per light). */
   function updateTraffic(positions, time) {
     let i = 0;
@@ -296,7 +392,16 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
         positions[i++] = x; positions[i++] = h; positions[i++] = -y;
       }
     }
+    for (const c of rampCarDefs) {
+      const total = c.path.total;
+      const d = (((c.s0 + c.dir * c.speed * time) % total) + total) % total;
+      const p = c.path.pathAt(d), h = c.hOf(d) + 0.75;
+      for (const k of [-0.8, 0.8]) {
+        const lat = c.off + k; // lateral offset, + = right of the polyline direction
+        positions[i++] = p.x + p.uy * lat; positions[i++] = h; positions[i++] = -(p.y - p.ux * lat);
+      }
+    }
   }
 
-  return { id, group, lights, carLights, updateTraffic, lanes, cars, length: L, stats: { id, piers, cars: cars.length, members: steelParts.count } };
+  return { id, group, lights, carLights, updateTraffic, lanes, cars, length: L, stats: { id, piers, cars: cars.length + rampCarDefs.length, ramps: Object.keys(paths).length, members: steelParts.count } };
 }

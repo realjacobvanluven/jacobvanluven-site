@@ -278,7 +278,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   }
   // Cambie, Granville and Burrard Bridges, up False Creek to the west.
   for (const spec of data.bridges) {
-    const br = createBridge(spec, { isWater, envMap });
+    const br = createBridge({ ...spec, ramps: data.ramps.filter((r) => r.bridge === spec.id) }, { isWater, envMap });
     scene.add(br.group);
     addLights(br.lights, 0);
     bridgeStats.push(br.stats);
