@@ -59,6 +59,7 @@ export function createBridge(spec, { isWater = () => false, envMap = null, carSp
   const W = (t, side, h) => { const [x, y] = at(t, side); return new THREE.Vector3(x, h, -y); };
 
   const group = new THREE.Group();
+  group.name = `bridge-${id}`;
   const concrete = new THREE.MeshStandardMaterial({ color: id === 'granville' ? 0x74777c : 0x6b6f76, roughness: 0.85, envMap, envMapIntensity: 0.4 });
   const steel = new THREE.MeshStandardMaterial({ color: id === 'burrard' ? 0x3f4a52 : 0x4b5158, roughness: 0.55, metalness: 0.5, envMap, envMapIntensity: 0.7 });
   const asphalt = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.95, envMap, envMapIntensity: 0.15 });

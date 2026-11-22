@@ -571,7 +571,9 @@ for (const e of groundData.elements) {
   if (e.type !== 'way' || !e.geometry) continue;
   const pts = e.geometry.map((q) => toLocal([q.lon, q.lat]));
   if (t.highway) {
-    if (t.tunnel === 'yes' || t.layer && +t.layer < 0) continue;
+    // Paths on bridges and viaducts (or at any raised level) are not ground: painted flat they would run across the
+    // water and the land under every bridge. The bridges themselves are modelled in src/hero/bridge.js.
+    if (t.tunnel === 'yes' || (t.layer && +t.layer < 0) || (t.bridge && t.bridge !== 'boardwalk' && t.bridge !== 'no') || (t.layer && +t.layer >= 1)) continue;
     const line = simplify(pts, 1).filter(nearView);
     if (line.length >= 2) paths.push([t.highway === 'cycleway' ? 1 : 0, ...encodeRing(line)]);
   } else {

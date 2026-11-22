@@ -65,6 +65,8 @@ try {
       const THREE = await import('three');
       s.scene.traverse((o) => { if (o.userData.signatures) o.material = new THREE.MeshBasicMaterial({ color: 0xff6a00 }); });
     }
+    // &hide=bridge-cambie,bridge-granville: hide named scene groups (debugging).
+    if (params.get('hide')) { const names = params.get('hide').split(','); s.scene.traverse((o) => { if (names.includes(o.name)) o.visible = false; }); }
     if (params.get('bearing')) s.look({ bearing: +params.get('bearing'), pitch: +(params.get('pitch') ?? 0), fov: params.get('fov') ? +params.get('fov') : undefined }); // comparison / close-up views
     // &plane=arrival:0.4 (or departure:0.6): freeze a floatplane at that point of its flight.
     if (params.get('plane')) {
