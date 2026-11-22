@@ -149,6 +149,7 @@ export function createSignatures(signatures, facadeMaterial) {
   g.setAttribute('aSeed', new THREE.Float32BufferAttribute(all.seed, 1));
   g.setAttribute('aKind', new THREE.Float32BufferAttribute(all.kind, 1));
   g.setAttribute('aTop', new THREE.Float32BufferAttribute(all.top, 1));
+  g.setAttribute('aWall', new THREE.Float32BufferAttribute(new Float32Array(all.pos.length), 3)); // no per-wall fit: curved skins use the world grid
   g.computeBoundingSphere();
   return { mesh: new THREE.Mesh(g, facadeMaterial), crownLights, footprints };
 }

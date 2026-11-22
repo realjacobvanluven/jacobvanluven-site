@@ -55,12 +55,14 @@ function triangulate(r) {
 }
 
 function createChunk() {
-  return { pos: [], nrm: [], seed: [], kind: [], top: [] };
+  return { pos: [], nrm: [], seed: [], kind: [], top: [], wall: [] };
 }
 
 /** Prism with a per-vertex top height (flat, or sloped for angled crowns). */
+let wallCounter = 0;
 function pushPrism(ch, ring, base, topAt, roofTop, seed, kind) {
-  const add = (x, y, z, nx, ny, nz) => { ch.pos.push(x, y, z); ch.nrm.push(nx, ny, nz); ch.seed.push(seed); ch.kind.push(kind); ch.top.push(roofTop); };
+  // wall = [distance along this wall, wall length, wall id]: lets the shader fit whole windows to each wall.
+  const add = (x, y, z, nx, ny, nz, w = [0, 0, 0]) => { ch.pos.push(x, y, z); ch.nrm.push(nx, ny, nz); ch.seed.push(seed); ch.kind.push(kind); ch.top.push(roofTop); ch.wall.push(w[0], w[1], w[2]); };
   const r = signedArea(ring) < 0 ? ring.slice().reverse() : ring;
   const tops = r.map(topAt);
   for (let i = 0; i < r.length; i++) {
@@ -68,8 +70,9 @@ function pushPrism(ch, ring, base, topAt, roofTop, seed, kind) {
     const [x0, y0] = r[i], [x1, y1] = r[j];
     const len = Math.hypot(x1 - x0, y1 - y0) || 1;
     const nx = (y1 - y0) / len, nz = (x1 - x0) / len;
-    const a = [x0, base, -y0], b = [x1, base, -y1], c = [x1, tops[j], -y1], d = [x0, tops[i], -y0];
-    for (const v of [a, b, c, a, c, d]) add(v[0], v[1], v[2], nx, 0, nz);
+    const id = (wallCounter++ % 997) / 997;
+    const a = [x0, base, -y0, 0], b = [x1, base, -y1, len], c = [x1, tops[j], -y1, len], d = [x0, tops[i], -y0, 0];
+    for (const v of [a, b, c, a, c, d]) add(v[0], v[1], v[2], nx, 0, nz, [v[3], len, id]);
   }
   for (const [i, j, k] of triangulate(r)) {
     // Roof normal from the triangle (sloped for angled crowns).
@@ -153,11 +156,11 @@ function build({ buildings, camera, lod }) {
   for (const ch of chunks.values()) {
     const c = {
       position: new Float32Array(ch.pos), normal: new Float32Array(ch.nrm),
-      seed: new Float32Array(ch.seed), kind: new Float32Array(ch.kind), top: new Float32Array(ch.top),
+      seed: new Float32Array(ch.seed), kind: new Float32Array(ch.kind), top: new Float32Array(ch.top), wall: new Float32Array(ch.wall),
     };
     triangles += ch.pos.length / 9;
     out.push(c);
-    transfer.push(c.position.buffer, c.normal.buffer, c.seed.buffer, c.kind.buffer, c.top.buffer);
+    transfer.push(c.position.buffer, c.normal.buffer, c.seed.buffer, c.kind.buffer, c.top.buffer, c.wall.buffer);
   }
   stats.chunks = out.length;
   stats.triangles = triangles;

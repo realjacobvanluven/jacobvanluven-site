@@ -26,6 +26,7 @@ export function createBuildings(buildings, uniforms, { camera = [0, 0], lod = {}
         g.setAttribute('aSeed', new THREE.BufferAttribute(c.seed, 1));
         g.setAttribute('aKind', new THREE.BufferAttribute(c.kind, 1));
         g.setAttribute('aTop', new THREE.BufferAttribute(c.top, 1));
+        g.setAttribute('aWall', new THREE.BufferAttribute(c.wall, 3));
         g.computeBoundingSphere();
         group.add(new THREE.Mesh(g, material));
       }
@@ -42,6 +43,8 @@ export function createFacadeMaterial(uniforms) {
       attribute float aSeed;
       attribute float aKind;
       attribute float aTop;
+      attribute vec3 aWall;
+      varying vec3 vWall;
       varying vec3 vWorld;
       varying vec3 vNormal;
       varying float vSeed;
@@ -51,7 +54,7 @@ export function createFacadeMaterial(uniforms) {
         vec4 w = modelMatrix * vec4(position, 1.0);
         vWorld = w.xyz;
         vNormal = normalize(mat3(modelMatrix) * normal);
-        vSeed = aSeed; vKind = aKind; vTop = aTop;
+        vSeed = aSeed; vKind = aKind; vTop = aTop; vWall = aWall;
         gl_Position = projectionMatrix * viewMatrix * w;
       }
     `,
@@ -66,6 +69,7 @@ export function createFacadeMaterial(uniforms) {
       varying float vSeed;
       varying float vKind;
       varying float vTop;
+      varying vec3 vWall; // distance along the wall, wall length, wall id (0 length: use the world grid)
 
       // A lit room seen through the glass (interior mapping): a box behind the facade, so ceiling, back wall,
       // side walls and floor shift with the camera instead of the window being a flat lit rectangle.
@@ -142,9 +146,16 @@ export function createFacadeMaterial(uniforms) {
         // Facade grid. u along the wall, v up. Panel widths and floor heights by kind.
         vec2 t = normalize(vec2(-n.z, n.x));
         vec3 T = vec3(t.x, 0.0, t.y);
-        float u = dot(vWorld.xz, t);
         float floorH = isConcrete * 3.0 + isResi * 2.9 + isOffice * 3.8;
         float colW = isConcrete * 1.9 + isResi * 1.25 + isOffice * 1.5;
+        // Fit whole window columns to each wall (no windows sliced at the corners); curved hand-built
+        // towers have no wall data and use the world grid.
+        float wallLen = vWall.y;
+        float fitted = step(0.5, wallLen);
+        float u = mix(dot(vWorld.xz, t), vWall.x, fitted);
+        float shortWall = fitted * step(wallLen, colW * 0.8); // chamfers and slivers: no windows
+        colW = mix(colW, wallLen / max(1.0, floor(wallLen / colW + 0.5)), fitted);
+        float edgeDist = mix(99.0, min(vWall.x, wallLen - vWall.x), fitted);
         vec2 g = vec2(u / colW, (vWorld.y - 0.4) / floorH);
         vec2 cell = floor(g);
         vec2 f = fract(g);
@@ -156,14 +167,24 @@ export function createFacadeMaterial(uniforms) {
         // Glazed area inside each cell.
         vec2 lo = isConcrete * vec2(0.2, 0.32) + isResi * vec2(0.04, 0.2) + isOffice * vec2(0.03, 0.3);
         vec2 hi = isConcrete * vec2(0.8, 0.84) + isResi * vec2(0.96, 0.97) + isOffice * vec2(0.97, 0.97);
+        // Lobby / shopfronts: the ground floor has taller glazing.
+        float groundFloor = 1.0 - step(1.0, floor((vWorld.y - 0.4) / floorH));
+        lo.y = mix(lo.y, 0.06, groundFloor); hi.y = mix(hi.y, 0.9, groundFloor);
         vec2 m = smoothstep(lo - aa, lo + aa, f) * (1.0 - smoothstep(hi - aa, hi + aa, f));
         float isWindow = m.x * m.y;
+        // Solid corners (piers / corner mullions), very short walls, and a parapet band at the top.
+        float aaU = fwidth(u);
+        float corner = 1.0 - smoothstep(0.3, 0.3 + aaU, edgeDist);
+        float parapet = step(vTop - 1.1, vWorld.y);
+        isWindow *= (1.0 - corner) * (1.0 - parapet) * (1.0 - shortWall);
         float windowArea = (hi.x - lo.x) * (hi.y - lo.y);
         // Residential: the slab edge / balcony band under each floor's glass.
         float slab = isResi * (1.0 - smoothstep(0.16 - aa.y, 0.16 + aa.y, f.y));
 
         // Who's home: units span several panels; offices light whole floors.
         float unitW = isConcrete * 2.0 + isResi * 3.0 + isOffice * 6.0;
+        // Each wall gets its own pattern (shift by whole units so rooms still line up with windows).
+        cell.x += floor(vWall.z * 997.0) * unitW * 7.0;
         vec2 unit = vec2(floor(cell.x / unitW), cell.y);
         float litShare = mix(0.20, 0.35, hash12(vec2(vSeed * 13.1, 7.7)));
         float r1 = hash12(unit + vSeed * 117.0);
@@ -210,7 +231,11 @@ export function createFacadeMaterial(uniforms) {
         float streak = hash12(vec2(floor(u / 0.3), vSeed * 41.0));
         float underSill = m.x * (1.0 - step(lo.y, f.y)) * smoothstep(0.0, lo.y, f.y);
         concrete *= 1.0 - detail * (0.22 * underSill * streak + 0.06 * streak);
-        vec3 wallLit = concrete * skyAmb * vec3(0.55, 0.62, 0.85) + concrete * westWarm * westFacing * 0.2;
+        // Sky light is a touch stronger higher up; street lights wash the lower floors warm, in pools.
+        skyAmb *= 0.85 + 0.2 * smoothstep(0.0, 150.0, vWorld.y);
+        float streetWash = exp(-max(vWorld.y, 0.0) / 9.0) * (0.55 + 0.45 * sin(u * 0.19 + vSeed * 40.0));
+        vec3 washCol = vec3(1.0, 0.62, 0.3) * streetWash;
+        vec3 wallLit = concrete * skyAmb * vec3(0.55, 0.62, 0.85) + concrete * westWarm * westFacing * 0.2 + concrete * washCol * 0.9;
         // Concrete: a lighter sill under each window and a floor line.
         float sill = isConcrete * m.x * step(lo.y - 0.05, f.y) * (1.0 - step(lo.y, f.y));
         float floorLine = isConcrete * (1.0 - smoothstep(0.03 - aa.y, 0.05 + aa.y, f.y));
@@ -232,8 +257,12 @@ export function createFacadeMaterial(uniforms) {
 
         vec3 frameCol = mix(wallLit, vec3(0.018, 0.02, 0.025), 1.0 - isConcrete);
         frameCol = mix(frameCol, vec3(0.012, 0.013, 0.016), isOffice); // spandrels
+        frameCol += vec3(0.02, 0.016, 0.012) * washCol * (1.0 - isConcrete);
+        // Parapet cap and corner trim: a little lighter (metal / precast), catching the sky.
+        frameCol = mix(frameCol, wallLit * 1.15 + vec3(0.004, 0.005, 0.008), max(parapet, corner * (1.0 - isConcrete)) * (1.0 - isConcrete * 0.6));
         frameCol *= ao;
         glassCol *= ao;
+        glassCol += vec3(0.012, 0.008, 0.004) * washCol;
         slabCol *= ao;
 
         // Far away: average instead of aliasing.
