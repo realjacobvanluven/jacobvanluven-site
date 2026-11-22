@@ -96,6 +96,9 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   window (Lighthouse mobile 99). Posters in `src/assets/hero/` are rendered with `scripts/skyline-lookdev.html`
   (`&w=…&h=…&dpr=…`); re-render them whenever the scene's look changes.
   Hover/tap highlights + labels; click flies the camera in, then routes.
+- **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Space Grotesk 700, uppercase, an orange
+  stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
+  (`summary` prop in `src/pages/index.astro`), then the headline and subheading.
 - **Scroll (decided 2026-11-21):** one scroll is enough. The first scroll (or Tab / "Skip to work") swaps the headline
   for all four section cards at once; hovering or focusing a card turns the camera to its landmark. No multi-screen tour.
 - **Mobile:** device-tilt parallax (with the iOS permission prompt handled gracefully), tap hotspots,

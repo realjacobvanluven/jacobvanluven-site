@@ -19,8 +19,10 @@ import { heroStops } from '../data/hero-stops';
 interface Props {
   title: string;
   subheading: string;
+  /** One-line summary under the name. */
+  summary: string;
 }
-const { title, subheading } = Astro.props;
+const { title, subheading, summary } = Astro.props;
 
 const srcset = async (src: ImageMetadata, widths: number[]) =>
   (await Promise.all(widths.map((width) => getImage({ src, width, format: 'webp' })))).map((img, i) => `${img.src} ${widths[i]}w`).join(', ');
@@ -64,9 +66,19 @@ const stops = await heroStops();
     </div>
 
     <div class="copy" data-copy>
-      <p class="label">Jacob Van Luven</p>
-      <h1 id="hero-title">{title}</h1>
-      <p class="subheading">{subheading}</p>
+      <h1 id="hero-title" class="name" data-name>
+        <span class="name-line" data-text="Jacob">Jacob</span>
+        <span class="name-line" data-text="Van Luven">Van Luven</span>
+      </h1>
+      <p class="summary">
+        {summary.split(' · ').map((part, i) => (
+          <>
+            {i > 0 && <span aria-hidden="true"> · </span>}
+            <span class="part">{part}</span>
+          </>
+        ))}
+      </p>
+      <p class="headline">{title} <span class="subheading">{subheading}</span></p>
       <a class="skip" href="#work">Skip to work <span aria-hidden="true">↓</span></a>
     </div>
 
@@ -171,21 +183,109 @@ const stops = await heroStops();
     transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
   }
 
-  .copy h1 {
-    font-size: clamp(2rem, 5.2vw, 3.75rem);
-    margin: 0 0 0.75rem;
+  /* The name: big extruded letters, lit like signage. The extrusion is stacked text-shadows whose
+     direction (--ex/--ey) follows the cursor, and the whole name tilts a little in 3D. */
+  .name {
+    --ex: 0.011em;
+    --ey: 0.014em;
+    --rx: 0deg;
+    --ry: 0deg;
+    margin: 0 0 0.9rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(3.1rem, 9vw, 7.5rem);
+    line-height: 0.88;
+    letter-spacing: -0.035em;
+    text-transform: uppercase;
+    color: #fff3e6;
+    text-shadow:
+      calc(var(--ex) * 1) calc(var(--ey) * 1) 0 rgb(232, 108, 30),
+      calc(var(--ex) * 2) calc(var(--ey) * 2) 0 rgb(215, 100, 28),
+      calc(var(--ex) * 3) calc(var(--ey) * 3) 0 rgb(198, 91, 25),
+      calc(var(--ex) * 4) calc(var(--ey) * 4) 0 rgb(181, 83, 23),
+      calc(var(--ex) * 5) calc(var(--ey) * 5) 0 rgb(164, 75, 21),
+      calc(var(--ex) * 6) calc(var(--ey) * 6) 0 rgb(147, 66, 18),
+      calc(var(--ex) * 7) calc(var(--ey) * 7) 0 rgb(131, 58, 16),
+      calc(var(--ex) * 8) calc(var(--ey) * 8) 0 rgb(114, 49, 13),
+      calc(var(--ex) * 9) calc(var(--ey) * 9) 0 rgb(97, 41, 11),
+      calc(var(--ex) * 10) calc(var(--ey) * 10) 0 rgb(80, 33, 9),
+      calc(var(--ex) * 11) calc(var(--ey) * 11) 0 rgb(63, 24, 6),
+      calc(var(--ex) * 12) calc(var(--ey) * 12) 0 rgb(46, 16, 4),
+      calc(var(--ex) * 14) calc(var(--ey) * 16) 0.18em rgb(0 0 0 / 0.65),
+      0 0 0.45em rgb(255 122 26 / 0.28);
+    transform: perspective(70rem) rotateX(var(--rx)) rotateY(var(--ry));
+    transform-origin: 20% 60%;
+    transition: transform 0.25s ease-out;
   }
 
-  .label {
-    margin: 0 0 0.75rem;
+  .name-line {
+    position: relative;
+    display: block;
+    width: fit-content;
+  }
+
+  /* A slow highlight sweeping across the face of the letters. */
+  .name-line::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    text-shadow: none;
+    color: transparent;
+    background: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.85) 50%, transparent 65%) no-repeat;
+    background-size: 250% 100%;
+    background-position: 120% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .name-line::after {
+      animation: sheen 7s ease-in-out 1.2s infinite;
+    }
+
+    .name-line + .name-line::after {
+      animation-delay: 1.45s;
+    }
+  }
+
+  @keyframes sheen {
+    0% { background-position: 120% 0; }
+    30%, 100% { background-position: -20% 0; }
+  }
+
+  .summary {
+    margin: 0 0 1.1rem;
+    font: 500 clamp(0.78rem, 1.3vw, 0.95rem) var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--accent-soft);
   }
 
-  .subheading {
-    font-family: var(--font-display);
-    font-size: clamp(1.15rem, 2.6vw, 1.5rem);
-    color: var(--accent);
+  .summary .part {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 30rem) {
+    .summary {
+      font-size: 0.7rem;
+      letter-spacing: 0.035em;
+    }
+  }
+
+  .headline {
+    max-width: 34rem;
     margin: 0 0 1.25rem;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: clamp(1.15rem, 2.1vw, 1.6rem);
+    line-height: 1.3;
+    color: var(--text);
+  }
+
+  .subheading {
+    color: var(--accent);
+    white-space: nowrap;
   }
 
   .skip,
@@ -472,7 +572,27 @@ const stops = await heroStops();
     else window.addEventListener('load', timer, { once: true });
   }
 
+  /** The name's depth follows the cursor: the letters tilt toward it and the extrusion swings away. */
+  function setUpName(root: HTMLElement) {
+    const name = root.querySelector<HTMLElement>('[data-name]');
+    if (!name || !window.matchMedia('(pointer: fine)').matches) return;
+    let raf = 0, x = 0, y = 0;
+    window.addEventListener('pointermove', (e) => {
+      x = e.clientX / innerWidth - 0.5;
+      y = e.clientY / innerHeight - 0.5;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        name.style.setProperty('--ry', `${(x * 10).toFixed(2)}deg`);
+        name.style.setProperty('--rx', `${(-y * 8).toFixed(2)}deg`);
+        name.style.setProperty('--ex', `${(0.011 - x * 0.016).toFixed(4)}em`);
+        name.style.setProperty('--ey', `${(0.014 - y * 0.012).toFixed(4)}em`);
+      });
+    }, { passive: true });
+  }
+
   if (root && motionOK) {
+    setUpName(root);
     const tour = setUpTour(root);
     if (webglAvailable()) whenEngaged(() => start(root, tour));
   } else {
