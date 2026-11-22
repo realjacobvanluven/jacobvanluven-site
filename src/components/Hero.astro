@@ -52,21 +52,6 @@ const stops = await heroStops();
     <canvas class="scene" data-canvas aria-hidden="true"></canvas>
     <div class="shade" aria-hidden="true"></div>
 
-    {/* Landmark markers (3D only). Following one flies the camera in, then opens the page. */}
-    <div class="hotspots" data-hotspots>
-      {
-        stops.map((s) => (
-          <a class="hotspot" href={s.href} data-hotspot={s.id} hidden tabindex="-1" aria-hidden="true">
-            <span class="dot" />
-            <span class="tag">
-              <span class="place">{s.place}</span>
-              <span class="section">{s.label}</span>
-            </span>
-          </a>
-        ))
-      }
-    </div>
-
     <div class="copy" data-copy>
       <img
         class="avatar"
@@ -226,7 +211,7 @@ const stops = await heroStops();
     font-weight: 800;
     font-size: clamp(2.8rem, min(8.4vw, 9.5svh), 7.2rem);
     line-height: 0.95;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.01em;
     text-transform: uppercase;
     color: #fff3e6;
     text-shadow:
@@ -254,6 +239,18 @@ const stops = await heroStops();
     display: block;
     width: fit-content;
     margin-inline: auto;
+  }
+
+  /* Wide screens: one long line so the name spans far more of the width. */
+  @media (min-width: 900px) {
+    .name {
+      font-size: clamp(2.8rem, min(7.4vw, 9.5svh), 7.2rem);
+    }
+
+    .name-line {
+      display: inline-block;
+      margin-inline: 0;
+    }
   }
 
   /* A slow highlight sweeping across the face of the letters. */
@@ -440,98 +437,6 @@ const stops = await heroStops();
     color: var(--text-muted);
   }
 
-  /* ---- Hotspot markers ---- */
-  .hotspots {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .hotspot {
-    position: absolute;
-    left: 0;
-    top: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    margin: -1.375rem 0 0 -1.375rem;
-    color: var(--text);
-    text-decoration: none;
-    pointer-events: auto;
-    will-change: transform;
-  }
-
-  .hotspot[hidden] {
-    display: none;
-  }
-
-  .dot {
-    position: relative;
-    width: 1.75rem;
-    height: 1.75rem;
-    flex: none;
-    border-radius: 999px;
-    border: 2px solid var(--accent);
-    background: rgb(255 122 26 / 0.18);
-    box-shadow: 0 0 12px rgb(255 122 26 / 0.6);
-    transition: transform 0.3s ease;
-  }
-
-  .dot::after {
-    content: '';
-    position: absolute;
-    inset: 0.45rem;
-    border-radius: 999px;
-    background: var(--accent);
-  }
-
-  .hotspot.active .dot {
-    transform: scale(1.25);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .dot {
-      animation: pulse 2.4s ease-in-out infinite;
-    }
-  }
-
-  @keyframes pulse {
-    50% {
-      box-shadow: 0 0 22px rgb(255 122 26 / 0.95);
-    }
-  }
-
-  .tag {
-    display: grid;
-    padding: 0.3rem 0.65rem;
-    border-radius: 6px;
-    background: rgb(8 8 10 / 0.78);
-    border: 1px solid rgb(255 255 255 / 0.12);
-    white-space: nowrap;
-    opacity: 0;
-    transform: translateX(-0.25rem);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-  }
-
-  .tag .place {
-    font: 500 0.6875rem var(--font-mono);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .tag .section {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1rem;
-  }
-
-  .hotspot:hover .tag {
-    opacity: 1;
-    transform: none;
-  }
-
   /* Horizontal look-around: grab the skyline (vertical scrolling still works on touch). */
   .stage {
     touch-action: pan-y;
@@ -688,7 +593,6 @@ const stops = await heroStops();
     const highlight = (id: string | null) => {
       state.focus = id;
       links.forEach((a) => a.classList.toggle('active', a.dataset.go === id));
-      root.querySelectorAll('[data-hotspot]').forEach((h) => h.classList.toggle('active', h.getAttribute('data-hotspot') === id));
     };
     const update = () => {
       const revealed = focusedInside || -root.getBoundingClientRect().top > 24;
@@ -705,11 +609,6 @@ const stops = await heroStops();
       a.addEventListener('focus', () => highlight(a.dataset.go!));
       a.addEventListener('blur', () => highlight(null));
     }
-    // Hovering a marker lights up its card too.
-    root.querySelectorAll<HTMLElement>('[data-hotspot]').forEach((h) => {
-      h.addEventListener('pointerenter', () => highlight(h.dataset.hotspot!));
-      h.addEventListener('pointerleave', () => highlight(null));
-    });
     // Keyboard: tabbing into the cards reveals them even at the top of the page.
     list.addEventListener('focusin', () => { focusedInside = true; update(); });
     list.addEventListener('focusout', (e) => {
@@ -732,7 +631,6 @@ const stops = await heroStops();
     const stage = root.querySelector<HTMLElement>('[data-stage]')!;
     const canvas = root.querySelector<HTMLCanvasElement>('[data-canvas]')!;
     const tiltButton = root.querySelector<HTMLButtonElement>('[data-tilt]')!;
-    const spots = [...root.querySelectorAll<HTMLAnchorElement>('[data-hotspot]')];
     const coarse = window.matchMedia('(pointer: coarse)').matches;
     const isPhone = coarse && Math.min(screen.width, screen.height) < 820;
 
@@ -839,12 +737,6 @@ const stops = await heroStops();
           current = view;
           hero.look(view);
 
-          for (const el of spots) {
-            const pt = hero.project(el.dataset.hotspot!);
-            const show = !!pt && pt.x > 24 && pt.x < innerWidth - 24 && pt.y > 70 && pt.y < innerHeight - 24;
-            if (el.hidden === show) el.hidden = !show;
-            if (show) el.style.transform = `translate(${pt!.x.toFixed(1)}px, ${pt!.y.toFixed(1)}px)`;
-          }
         },
       });
     } catch (err) {
@@ -938,7 +830,6 @@ const stops = await heroStops();
       flight = { from: current, to: { ...target, fov: current.fov * 0.45 }, t0: performance.now(), href };
       ctl.poke();
     };
-    for (const a of spots) a.addEventListener('click', (e) => fly(a.dataset.hotspot!, a.href, e));
     for (const a of root.querySelectorAll<HTMLAnchorElement>('[data-go]')) a.addEventListener('click', (e) => fly(a.dataset.go!, a.href, e));
     window.addEventListener('pageshow', () => stage.classList.remove('leaving'));
   }
