@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { miterOffsets } from './ribbon.js';
 
 /**
  * The waterfront and parks, the most visible ground in the shot (from OpenStreetMap via the data file):
@@ -50,19 +51,24 @@ function createGreens(greens, uniforms) {
 }
 
 /** Footpaths (light pavers) and bike paths (asphalt, dashed centre line), with path lights. */
-function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing }) {
+function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false }) {
   const pos = [], arc = [], across = [], half = [], cyc = [];
   const lamps = [];
   for (const p of paths) {
     const pts = p.line;
     const w = p.cycle ? 1.8 : 1.4;
+    const off = miterOffsets(pts, w);
     let cum = 0;
     for (let i = 1; i < pts.length; i++) {
       const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
       const seg = Math.hypot(bx - ax, by - ay);
       if (seg < 0.3) continue;
+      // Not over open water (a path ribbon painted across the creek reads as a glitch).
+      if (isWater((ax + bx) / 2, (ay + by) / 2)) { cum += seg; continue; }
       const nx = (by - ay) / seg, ny = -(bx - ax) / seg;
-      const v = [[ax - nx * w, ay - ny * w, cum, -w], [bx - nx * w, by - ny * w, cum + seg, -w], [bx + nx * w, by + ny * w, cum + seg, w], [ax + nx * w, ay + ny * w, cum, w]];
+      const [oa, ob] = [off[i - 1], off[i]];
+      // Shared (mitered) edge vertices: the ribbon is continuous through bends.
+      const v = [[ax - oa[0], ay - oa[1], cum, -w], [bx - ob[0], by - ob[1], cum + seg, -w], [bx + ob[0], by + ob[1], cum + seg, w], [ax + oa[0], ay + oa[1], cum, w]];
       for (const k of [0, 1, 2, 0, 2, 3]) {
         const [x, y, a, c] = v[k];
         pos.push(x, 0.1, -y); arc.push(a); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
@@ -177,10 +183,10 @@ export function createTrees(trees, uniforms, { max }) {
   return { group, count: list.length };
 }
 
-export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING } = {}) {
+export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater } = {}) {
   const group = new THREE.Group();
   group.add(createGreens(data.greens, uniforms));
-  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing });
+  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater });
   group.add(paths.mesh);
   const trees = createTrees(data.trees, uniforms, { max: maxTrees });
   group.add(trees.group);

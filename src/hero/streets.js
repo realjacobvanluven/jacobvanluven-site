@@ -8,8 +8,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { miterOffsets } from './ribbon.js';
 
-export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 2600, lampSpacing = 34, carSpacing = [18, 48], ribbonDistance = 2200, localTrafficDistance = 1300, bodyDistance = 1500 } = {}) {
+export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 2600, lampSpacing = 34, carSpacing = [18, 48], ribbonDistance = 2200, localTrafficDistance = 1300, bodyDistance = 1500, isWater = () => false } = {}) {
   let seed = 77;
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   const far = ([x, y]) => Math.hypot(x - camera[0], y - camera[1]) > maxDistance;
@@ -40,12 +41,14 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     const phase = rand() * lampSpacing;
     if (pts.some((p) => Math.hypot(p[0] - camera[0], p[1] - camera[1]) < ribbonDistance)) {
       const w = half + 2;
+      const off = miterOffsets(pts, w); // shared edge vertices: no notches at bends
       for (let i = 1; i < pts.length; i++) {
         const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
         const seg = cum[i] - cum[i - 1];
         if (seg < 0.5) continue;
-        const nx = (by - ay) / seg, ny = -(bx - ax) / seg; // right of travel
-        const v = [[ax - nx * w, ay - ny * w, cum[i - 1], -w], [bx - nx * w, by - ny * w, cum[i], -w], [bx + nx * w, by + ny * w, cum[i], w], [ax + nx * w, ay + ny * w, cum[i - 1], w]];
+        if (isWater((ax + bx) / 2, (ay + by) / 2)) continue; // never paint a street across the creek
+        const [oa, ob] = [off[i - 1], off[i]];
+        const v = [[ax - oa[0], ay - oa[1], cum[i - 1], -w], [bx - ob[0], by - ob[1], cum[i], -w], [bx + ob[0], by + ob[1], cum[i], w], [ax + oa[0], ay + oa[1], cum[i - 1], w]];
         for (const k of [0, 1, 2, 0, 2, 3]) {
           const [x, y, a, c] = v[k];
           rib.pos.push(x, 0.12, -y); rib.arc.push(a); rib.across.push(c); rib.phase.push(phase); rib.half.push(half);

@@ -47,9 +47,9 @@ function decodeSkytrain(raw) {
 }
 
 export const TIERS = {
-  high: { pixelRatio: 2, reflectionScale: 0.5, bloomScale: 0.5, bloom: true, lightShare: 1, samples: 0 },
-  medium: { pixelRatio: 1.5, reflectionScale: 0.25, bloomScale: 0.25, bloom: true, lightShare: 0.6, samples: 0 },
-  low: { pixelRatio: 1, reflectionScale: 0.25, bloomScale: 0.25, bloom: false, lightShare: 0.35, samples: 0 },
+  high: { pixelRatio: 2, reflectionScale: 0.5, bloomScale: 0.5, bloom: true, lightShare: 1, samples: 0, fxaa: true },
+  medium: { pixelRatio: 1.5, reflectionScale: 0.25, bloomScale: 0.25, bloom: true, lightShare: 0.6, samples: 0, fxaa: true },
+  low: { pixelRatio: 1, reflectionScale: 0.25, bloomScale: 0.25, bloom: false, lightShare: 0.35, samples: 0, fxaa: false },
 };
 export const TIER_ORDER = ['high', 'medium', 'low'];
 
@@ -60,8 +60,10 @@ export const TURN_BEARING = { desktop: 38, phone: 56 };
 
 const SCENE_DETAIL = {
   desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600, planeScale: 1.6,
+    openBoats: 18, ferries: 4,
     southBank: { furnitureDistance: 900, parkedDistance: 850, maxParked: 700, streetTrees: 1400, peopleDistance: 480, walkers: 80, cyclists: 18 } },
   phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000, planeScale: 2.8,
+    openBoats: 9, ferries: 3,
     southBank: { furnitureDistance: 500, parkedDistance: 450, maxParked: 180, streetTrees: 400, peopleDistance: 320, walkers: 26, cyclists: 7 } },
 };
 
@@ -266,7 +268,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   addLights(seawall.lamps, 0);
 
   // Waterfront and parks: lawns, footpaths and bike paths with path lights, mapped trees.
-  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance });
+  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater });
   scene.add(waterfront.group);
   addLights(waterfront.lamps, 2);
 
@@ -275,7 +277,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   if (bcUpdate) animators.push(bcUpdate);
 
   // Street life: lamps along the downtown streets, traffic on the main roads.
-  const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing });
+  const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing, isWater });
   scene.add(streets.surface);
   if (streets.bodies) scene.add(streets.bodies);
   addLights(streets.lamps, 2);
@@ -345,7 +347,23 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
 
   // Keep the water right below the camera calm (it holds the headline on phones): no boats within 220 m.
   await breathe();
-  const boats = createBoats(data.boats, data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
+  // Open-water boats (added 2026-11-22): sailboats and cruisers at anchor out in the creek, in the part of the water the
+  // camera sees tilted down or turned toward Granville Island. The mapped boats all sit in marinas; without these the
+  // middle of the creek is empty. Each needs clear water around it (no boat on a shoreline).
+  const openBoats = [];
+  {
+    let bs = 7;
+    const br = () => ((bs = (bs * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const clear = (x, y) => isWater(x, y) && [0, 1, 2, 3, 4, 5, 6, 7].every((k) => isWater(x + Math.cos(k * 0.785) * 55, y + Math.sin(k * 0.785) * 55));
+    for (let tries = 0; tries < 900 && openBoats.length < detail.openBoats; tries++) {
+      const b = THREE.MathUtils.degToRad(268 + br() * 84), d = 280 + br() * 1000;
+      const x = CAMERA_POSITION[0] + Math.sin(b) * d, y = CAMERA_POSITION[1] + Math.cos(b) * d;
+      if (!clear(x, y) || openBoats.some((o) => Math.hypot(o.x - x, o.y - y) < 70)) continue;
+      const sail = br() < 0.5;
+      openBoats.push({ x, y, heading: br() * Math.PI * 2, length: sail ? 8 + br() * 6 : 7 + br() * 8, sail });
+    }
+  }
+  const boats = createBoats([...data.boats, ...openBoats], data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
   scene.add(boats.group);
   addLights(boats.lights, 2);
   // Two Aquabus ferries crossing False Creek in the foreground: candidate crossings (bearing/distance
@@ -369,10 +387,15 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     [[290, 220], [325, 430]],
     [[350, 120], [345, 380]],
     [[20, 120], [355, 300]],
+    // Toward Granville Island and under the Cambie Bridge.
+    [[272, 1650], [286, 900]],
+    [[283, 520], [296, 330]],
+    [[276, 1100], [284, 700]],
+    [[305, 260], [284, 560]],
   ];
   const ferrySpots = [];
   for (const [[ba, da], [bb, db]] of crossings) {
-    if (ferrySpots.length === 2) break;
+    if (ferrySpots.length === detail.ferries) break;
     const from = findWater(ba, da), to = findWater(bb, db);
     if (from && to && pathIsWater(from, to) && Math.hypot(to.x - from.x, to.y - from.y) > 120) ferrySpots.push({ from, to });
   }
@@ -413,6 +436,8 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     passes.bloomPass.enabled = q.bloom;
     composer.setSize(width, height);
     passes.grainPass.uniforms.uRes.value.set(width * pr, height * pr);
+    passes.fxaaPass.enabled = q.fxaa;
+    passes.fxaaPass.uniforms.resolution.value.set(1 / (width * pr), 1 / (height * pr));
     water.setReflectionSize(width * pr * q.reflectionScale, height * pr * q.reflectionScale);
     uniforms.uPixelHeight.value = height * pr;
     points.geometry.setDrawRange(0, Math.round(lights.length * q.lightShare));

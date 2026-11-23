@@ -14,8 +14,8 @@ import { orientedExtents, centroid } from './skyline-data.js';
 // Painted wall colours (dark linear albedo: they sit in blue-hour light): brick red, ochre, teal, cream, navy, green,
 // corrugated grey, rust orange, slate blue, mustard.
 const PALETTE = [
-  [0.5, 0.1, 0.07], [0.6, 0.42, 0.13], [0.07, 0.34, 0.36], [0.66, 0.63, 0.54], [0.12, 0.17, 0.3],
-  [0.22, 0.4, 0.18], [0.42, 0.43, 0.46], [0.62, 0.27, 0.09], [0.2, 0.3, 0.45], [0.68, 0.52, 0.1],
+  [0.38, 0.4, 0.42], [0.45, 0.16, 0.12], [0.18, 0.3, 0.3], [0.58, 0.55, 0.49], [0.24, 0.28, 0.36],
+  [0.26, 0.34, 0.22], [0.48, 0.36, 0.14], [0.4, 0.22, 0.12], [0.62, 0.6, 0.55], [0.62, 0.6, 0.55], [0.38, 0.4, 0.42],
 ];
 const ROOF = [0.16, 0.17, 0.19];
 
@@ -116,8 +116,13 @@ function createShedMaterial(uniforms) {
         float roofish = max(isRoof, step(0.35, n.y));
         vec3 sky = skyColor(normalize(vec3(n.x, max(n.y, 0.15), n.z)));
         // Sky light from above, warm spill from the lamps and lit doorways near the ground.
-        vec3 col = vAlbedo * (0.25 + 0.75 * max(n.y, 0.0)) * vec3(0.5, 0.58, 0.8) * 0.55;
-        col += vAlbedo * vec3(1.0, 0.68, 0.38) * 0.11 * (1.0 - abs(n.y)) * (0.45 + 0.9 * smoothstep(9.0, 0.5, vWorld.y));
+        // Facing matters: the west afterglow lights walls that face it, the rest get cool sky light.
+        float afterglow = max(dot(n, normalize(vec3(uSunDir.x, 0.15, uSunDir.z))), 0.0);
+        vec3 col = vAlbedo * (0.16 + 0.55 * max(n.y, 0.0)) * vec3(0.5, 0.58, 0.8);
+        col += vAlbedo * vec3(1.0, 0.6, 0.32) * 0.55 * afterglow * (1.0 - abs(n.y));
+        col += vAlbedo * vec3(1.0, 0.68, 0.38) * 0.1 * (1.0 - abs(n.y)) * (0.45 + 0.9 * smoothstep(9.0, 0.5, vWorld.y));
+        // Weathering: dirty at the foot of the wall, streaked below the eaves.
+        col *= 1.0 - 0.35 * (1.0 - roofish) * smoothstep(2.0, 0.0, vWorld.y);
         col += sky * 0.5 * roofish * mix(0.1, 0.6, pow(1.0 - max(dot(n, V), 0.0), 4.0)); // metal roofs catch the sky
         // Walls: corrugation lines, then lit shopfront windows and doorways along the ground floor.
         float along = dot(vWorld.xz, vDir);
@@ -174,16 +179,19 @@ function createSilos(silos, uniforms) {
         vec2 r = vWorld.xz - vCentre.xz;
         float ang = atan(r.y, r.x);
         float h = vWorld.y;
-        // Blocks of colour: sectors around the silo × bands up it, a different pick per silo and block.
-        float sector = floor((ang + 3.14159) / 6.28318 * 4.0);
-        float band = floor(h / 9.0);
+        // Pale concrete with a few large painted patches (about one in three), a different pick per silo.
+        float sector = floor((ang + 3.14159) / 6.28318 * 6.0);
+        float band = floor(h / 11.0);
         float id = hash12(vec2(sector * 3.1 + floor(vCentre.x * 0.37), band * 5.3 + floor(vCentre.z * 0.21)));
-        vec3 albedo = paint(id) * 0.72;
-        // Faint vertical seams where the concrete was poured in lifts.
-        albedo *= 1.0 - 0.12 * step(0.96, fract(h / 3.3));
-        vec3 col = albedo * (0.3 + 0.7 * max(n.y, 0.0)) * vec3(0.55, 0.62, 0.85) * 0.6;
+        vec3 concrete = vec3(0.58, 0.58, 0.56);
+        vec3 albedo = id > 0.66 ? paint((id - 0.66) / 0.34) * 0.8 : concrete;
+        albedo *= 1.0 - 0.1 * step(0.95, fract(h / 3.3)); // pour lines
+        // Round shading: afterglow side bright, shadow side cool and dark.
+        float glow = max(dot(n, normalize(vec3(uSunDir.x, 0.1, uSunDir.z))), 0.0);
+        vec3 col = albedo * (0.12 + 0.5 * max(n.y, 0.0)) * vec3(0.5, 0.58, 0.8);
+        col += albedo * vec3(1.0, 0.6, 0.32) * 0.65 * glow * (1.0 - abs(n.y));
         // Floodlights from the yard: warm light on the lower third, fading up.
-        col += albedo * vec3(1.0, 0.7, 0.42) * 0.85 * smoothstep(20.0, 0.0, h) * (1.0 - abs(n.y));
+        col += albedo * vec3(1.0, 0.7, 0.42) * 0.6 * smoothstep(20.0, 0.0, h) * (1.0 - abs(n.y));
         col = mix(col, vec3(0.03, 0.032, 0.036), step(0.9, vTop) * step(0.7, n.y)); // dark cap
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
@@ -216,7 +224,7 @@ export function createGranville(gi, uniforms, { lightShare = 1 } = {}) {
     const area = Math.abs(signedArea(ring));
     const e = orientedExtents(ring);
     const rectArea = 4 * e.a * e.b;
-    const albedo = PALETTE[Math.floor(rand() * PALETTE.length)].map((v) => v * 0.7);
+    const albedo = PALETTE[Math.floor(rand() * PALETTE.length)].map((v) => v * 0.85);
     const eave = Math.max(4, bd.h);
     const isRect = area / (rectArea || 1) > 0.72 && e.b > 3 && e.a > 4;
     const c = centroid(ring);
@@ -224,11 +232,17 @@ export function createGranville(gi, uniforms, { lightShare = 1 } = {}) {
       const outline = rect(e.center, e.angle, e.a, e.b);
       walls(b, outline, 0, eave, albedo, seed);
       if (area > 900) {
-        // A market hall: low flat roof with a raised glazed clerestory down the middle.
-        cap(b, outline, eave, [ROOF[0], ROOF[1], ROOF[2]], seed);
-        const cl = rect(e.center, e.angle, e.a * 0.78, e.b * 0.34);
-        walls(b, cl, eave, eave + 2.6, [0.2, 0.2, 0.22], seed, 2);
-        cap(b, cl, eave + 2.6, ROOF, seed);
+        // A market hall: a row of parallel gabled bays (the stepped corrugated roofline), one with a glazed clerestory.
+        const bays = Math.max(2, Math.round((2 * e.b) / 13));
+        const bw = e.b / bays;
+        const ux = Math.cos(e.angle), uy = Math.sin(e.angle), vx = -uy, vy = ux;
+        for (let k = 0; k < bays; k++) {
+          const off = -e.b + bw * (2 * k + 1);
+          gable(b, [e.center[0] + vx * off, e.center[1] + vy * off], e.angle, e.a, bw, eave, Math.min(bw * 0.42, 2.8), ROOF, seed);
+        }
+        const cl = rect(e.center, e.angle, e.a * 0.7, 1.2);
+        walls(b, cl, eave + 1.2, eave + 3.4, [0.2, 0.2, 0.22], seed, 2);
+        cap(b, cl, eave + 3.4, ROOF, seed);
       } else if (area > 120) {
         gable(b, e.center, e.angle, e.a, e.b, eave, Math.min(e.b * 0.5, 3.4), ROOF, seed);
       } else {
@@ -238,13 +252,13 @@ export function createGranville(gi, uniforms, { lightShare = 1 } = {}) {
       walls(b, ring, 0, eave, albedo, seed);
       cap(b, ring, eave, ROOF, seed);
     }
-    // A couple of warm lights over the doors (string lights, lanterns): the lit-up island look.
-    if (i % 2 === 0 && area > 80) {
-      const n = Math.min(3, 1 + Math.floor(area / 400));
+    // Warm lights along the long walls (string lights, lanterns, shopfronts): the lit-up island look.
+    if (area > 80) {
+      const n = Math.min(6, 1 + Math.floor(e.a / 9));
       for (let k = 0; k < n; k++) {
-        const t = rand() * Math.PI * 2, rx = Math.cos(t) * (e.a + 0.8), ry = Math.sin(t) * (e.b + 0.8);
-        const lx = c[0] + Math.cos(e.angle) * rx - Math.sin(e.angle) * ry, ly = c[1] + Math.sin(e.angle) * rx + Math.cos(e.angle) * ry;
-        lights.push({ p: [lx, 3.6, -ly], color: [4.2, 2.6, 1.2], size: 0.5 });
+        const t = ((k + 0.5) / n - 0.5) * 2 * e.a * 0.9, side = k % 2 ? 1 : -1;
+        const px = Math.cos(e.angle) * t - Math.sin(e.angle) * (e.b + 0.8) * side, py = Math.sin(e.angle) * t + Math.cos(e.angle) * (e.b + 0.8) * side;
+        lights.push({ p: [e.center[0] + px, 3.4, -(e.center[1] + py)], color: [3.6, 2.2, 1.0], size: 0.45 });
       }
     }
   });

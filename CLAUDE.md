@@ -130,6 +130,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   from OSM footprints (own `granville` section of the data file; colours and shapes approximate). `src/hero/southbank.js` adds
   seawall railings and benches, parked cars and street trees along local streets, and walkers and cyclists (cyclists carry a
   front light) on the paths, all sized per device (`SCENE_DETAIL.southBank` in `scene.js`). Scenery only, no hotspots.
+  Second pass (2026-11-22): FXAA pass in `post.js` (high and medium tiers; the scene had no anti-aliasing before); paths,
+  streets and the seawall deck are drawn as mitered ribbons (`src/hero/ribbon.js`) so they stay continuous through bends, are
+  clipped where they would cross water, and the deck slopes down to the ground; open-water sailboats and cruisers plus up to
+  four Aquabus-style ferries (`openBoats`, `ferries` in `SCENE_DETAIL`); Granville Island re-lit with muted weathered colours,
+  facing-dependent light, stepped multi-bay roofs on the market halls and mostly pale-concrete silos.
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

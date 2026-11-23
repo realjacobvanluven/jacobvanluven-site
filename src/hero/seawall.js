@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { miterOffsets } from './ribbon.js';
 
 /**
  * The seawall: a clean concrete edge along the shoreline, a paved path with warm pools of light under
@@ -10,6 +11,7 @@ const LAMP_SPACING = 28; // m
 const PATH_WIDTH = 5; // m, inland from the edge (wider strips overlap into blobs on tight curves)
 const LAMP_INSET = 3.5; // m from the edge
 const TOP = 1.6; // m above water
+const EMBANKMENT = 2.2; // m, the slope from the deck edge down to the ground
 
 /** Walks each shoreline polyline, calling fn(x, y, ux, uy, arc) every `spacing` metres (u = direction). */
 function walk(line, spacing, offset, fn) {
@@ -39,6 +41,8 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
 
   for (const line of shoreline) {
     if (!line.some(([x, y]) => near(x, y, maxDistance))) continue;
+    // Mitered inland edges (land is on the left): the deck and its sloping embankment stay continuous through bends.
+    const inner = miterOffsets(line, PATH_WIDTH), outer = miterOffsets(line, PATH_WIDTH + EMBANKMENT);
     let arc = 0;
     for (let i = 1; i < line.length; i++) {
       const [ax, ay] = line[i - 1], [bx, by] = line[i];
@@ -53,8 +57,13 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
       const a = W(ax, ay, -0.8), b = W(bx, by, -0.8), c = W(bx, by, TOP), d = W(ax, ay, TOP);
       for (const v of [a, c, b, a, d, c]) { pos.push(...v); nrm.push(nx, 0, nz); arcA.push(v === a || v === d ? arc : arc + len); acrossA.push(-1); }
       // Path (flat, inland).
-      const e = W(ax + lx * PATH_WIDTH, ay + ly * PATH_WIDTH, TOP), f = W(bx + lx * PATH_WIDTH, by + ly * PATH_WIDTH, TOP);
+      const e = W(ax - inner[i - 1][0], ay - inner[i - 1][1], TOP), f = W(bx - inner[i][0], by - inner[i][1], TOP);
       for (const [v, ac, acr] of [[d, arc, 0], [c, arc + len, 0], [f, arc + len, PATH_WIDTH], [d, arc, 0], [f, arc + len, PATH_WIDTH], [e, arc, PATH_WIDTH]]) {
+        pos.push(...v); nrm.push(0, 1, 0); arcA.push(ac); acrossA.push(acr);
+      }
+      // Embankment: the deck's inland edge slopes down to the ground instead of hanging in the air.
+      const g = W(ax - outer[i - 1][0], ay - outer[i - 1][1], 0.05), h = W(bx - outer[i][0], by - outer[i][1], 0.05);
+      for (const [v, ac, acr] of [[e, arc, PATH_WIDTH], [f, arc + len, PATH_WIDTH], [h, arc + len, PATH_WIDTH + EMBANKMENT], [e, arc, PATH_WIDTH], [h, arc + len, PATH_WIDTH + EMBANKMENT], [g, arc, PATH_WIDTH + EMBANKMENT]]) {
         pos.push(...v); nrm.push(0, 1, 0); arcA.push(ac); acrossA.push(acr);
       }
       arc += len;

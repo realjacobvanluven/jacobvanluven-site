@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 /** Film grain + gentle vignette, applied after tone mapping (display space). */
 const GrainShader = {
@@ -43,6 +44,9 @@ export function createComposer(renderer, scene, camera, { width, height, pixelRa
   bloomPass.scale = bloomScale;
   bloomPass.setSize = (w, h) => bloomSetSize(Math.max(2, w * bloomPass.scale * 2), Math.max(2, h * bloomPass.scale * 2));
   const outputPass = new OutputPass();
+  // Edge smoothing (the scene has no MSAA): one cheap full-screen pass on the display-space image.
+  const fxaaPass = new ShaderPass(FXAAShader);
+  fxaaPass.uniforms.resolution.value.set(1 / (width * pixelRatio), 1 / (height * pixelRatio));
   const grainPass = new ShaderPass(GrainShader);
   grainPass.uniforms.uRes.value.set(width * pixelRatio, height * pixelRatio);
   grainPass.uniforms.uGrain.value = grain;
@@ -51,6 +55,7 @@ export function createComposer(renderer, scene, camera, { width, height, pixelRa
   bloomPass.setSize(width * pixelRatio, height * pixelRatio);
   composer.addPass(bloomPass);
   composer.addPass(outputPass);
+  composer.addPass(fxaaPass);
   composer.addPass(grainPass);
-  return { composer, passes: { renderPass, bloomPass, outputPass, grainPass } };
+  return { composer, passes: { renderPass, bloomPass, outputPass, fxaaPass, grainPass } };
 }
