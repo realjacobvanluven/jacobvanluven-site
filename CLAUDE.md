@@ -147,6 +147,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   Fifth pass (2026-11-22, the foreground): the data build removes dead-end path stubs; open ground, lawns and paths use smooth noise
   textures (`groundGlsl` in `shaders.js`) instead of square patches, with kerbs, slab joints and wear on paths; paths ride the seawall
   deck and its slope exactly (`deckHeight` in `seawall.js`, `createShoreDistance` in `ribbon.js`); path and seawall lamps stand on posts.
+  Sixth pass (2026-11-22): map outlines are angular, so `src/hero/smooth.js` (`roundCorners`) rounds the corners of the shoreline,
+  streets and paths when the data is decoded (loops become circles, shoreline stair-steps soften); path ribbons are clipped to land in
+  short pieces so none runs into the water; local dead-end streets end in rounded turnarounds with a kerb and planted island
+  (`createTurnarounds` in `streets.js`); the seawall slope is 5 m wide (`EMBANKMENT`); the Habitat Island causeway is the shortest
+  gap to the shore, with connector paths added by the data build so the park paths lead onto it.
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

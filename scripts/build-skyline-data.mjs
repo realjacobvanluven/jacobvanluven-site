@@ -484,6 +484,7 @@ const mask = buildWaterMask(shoreLines, MASK);
 // Small islands near the camera (Habitat Island, beside Hinge Park) are joined to the shore by a rock causeway in real life, but
 // the coastline data leaves them as islands. Find each one and the shortest gap to the mainland; the scene bridges it.
 const causeways = [];
+const islandCentres = []; // parallel to causeways
 {
   const X0 = -700, X1 = 700, Y0 = -350, Y1 = 450, CELL = 4;
   const W = (X1 - X0) / CELL, H = (Y1 - Y0) / CELL;
@@ -523,7 +524,7 @@ const causeways = [];
         if (!best || d < best.d) best = { a, b, d };
       }
     }
-    if (best && best.d < 80) causeways.push([...best.a, ...best.b]);
+    if (best && best.d < 80) { causeways.push([...best.a, ...best.b]); islandCentres.push([cx, cy]); }
     console.log(`Island near the camera: ${Math.round(c.area)} m² at ${Math.round(cx)},${Math.round(cy)}${best ? `; gap to the mainland ${best.d.toFixed(0)} m` : '; no mainland within 100 m'}`);
   }
 }
@@ -733,6 +734,11 @@ for (const e of groundData.elements) {
     greens.push([kind, ...encodeRing(ring)]);
   }
 }
+// Each causeway is a straight rock-and-paver span across the shortest gap between an island and the shore. (The mapped path
+// that crosses the water there stops short of the shore, so it can't be followed.) Connector paths are added below, so the
+// park paths lead onto it at both ends.
+const causewayLines = causeways.map((c) => [[c[0], c[1]], [c[2], c[3]]]);
+
 // OpenStreetMap maps many paths twice (parallel ways, overlapping segments), which draws as a jumble. Longest first:
 // drop any segment that runs along (nearly parallel, within DEDUPE_M of) one already kept; keep crossings and branches.
 const DEDUPE_M = 2.6;
@@ -807,6 +813,12 @@ const keptLines = [];
     removed += lines.length - next.length;
     if (next.length === lines.length) break;
     lines = next;
+  }
+  // Connectors: from each causeway end to the nearest path vertex within 35 m (the island's paths, and the park's).
+  for (const cw of causewayLines) for (const E of [cw[0], cw[cw.length - 1]]) {
+    let best = null;
+    for (const l of lines) for (const V of l.line) { const d = Math.hypot(V[0] - E[0], V[1] - E[1]); if (d > 2 && d < 35 && (!best || d < best.d)) best = { d, V }; }
+    if (best) lines.push({ cycle: false, line: [E, best.V] });
   }
   for (const l of lines) paths.push([l.cycle ? 1 : 0, ...encodeRing(l.line)]);
   console.log(`Paths: removed ${removed} dead-end stubs; ${paths.length} lines remain`);
@@ -919,8 +931,8 @@ const data = {
   signatures,
   // Ground height under the south bank: decimetres, rows south → north, each row delta-encoded west → east
   southTerrain: { x0: SOUTH_ELEVATION.x0, y0: SOUTH_ELEVATION.y0, step: SOUTH_ELEVATION.step, cols: elev.cols, rows: elev.rows, heights: southTerrainRows },
-  // Rock causeways [axDm, ayDm, bxDm, byDm] joining small islands to the shore (Habitat Island)
-  causeways: causeways.map((c) => c.map(dm)),
+  // Rock causeways joining small islands to the shore (Habitat Island): flat [xDm, yDm, …] polylines
+  causeways: causewayLines.map((l) => l.flatMap(([x, y]) => [dm(x), dm(y)])),
   // Granville Island (hand-built in src/hero/granville.js): its buildings [heightDm, baseDm, ...ring] and the Ocean
   // Concrete silos [xDm, yDm, radiusDm, heightDm].
   granville: {

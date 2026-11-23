@@ -11,7 +11,7 @@ const LAMP_SPACING = 28; // m
 const PATH_WIDTH = 5; // m, inland from the edge (wider strips overlap into blobs on tight curves)
 const LAMP_INSET = 3.5; // m from the edge
 const TOP = 1.6; // m above water
-const EMBANKMENT = 2.2; // m, the slope from the deck edge down to the ground
+const EMBANKMENT = 5; // m, the slope from the deck edge down to the ground
 /** The deck's profile, so other layers (the paths) can ride on it exactly: height above the water at distance d inland of the shoreline. */
 export const deckHeight = (d) => (d <= PATH_WIDTH ? TOP : d >= PATH_WIDTH + EMBANKMENT ? 0 : TOP + (0.05 - TOP) * ((d - PATH_WIDTH) / EMBANKMENT));
 

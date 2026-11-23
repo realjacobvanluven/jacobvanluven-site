@@ -68,16 +68,25 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
       const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
       const seg = Math.hypot(bx - ax, by - ay);
       if (seg < 0.3) continue;
-      // Not over open water (a path ribbon painted across the creek reads as a glitch).
-      if (isWater((ax + bx) / 2, (ay + by) / 2)) { cum += seg; continue; }
       const nx = (by - ay) / seg, ny = -(bx - ax) / seg;
       const [oa, ob] = [off[i - 1], off[i]];
-      // Shared (mitered) edge vertices: the ribbon is continuous through bends.
-      const v = [[ax - oa[0], ay - oa[1], cum, -w], [bx - ob[0], by - ob[1], cum + seg, -w], [bx + ob[0], by + ob[1], cum + seg, w], [ax + oa[0], ay + oa[1], cum, w]];
-      for (const k of [0, 1, 2, 0, 2, 3]) {
-        const [x, y, a, c] = v[k];
-        // On or beside the seawall: ride the deck and its slope, so the path and the deck are one surface.
-        pos.push(x, Math.max(0.1 + heightAt(x, y), deckHeight(shoreDistance(x, y)) + 0.03), -y); arc.push(a); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
+      // In short pieces, each tested against the water: a ribbon must stop at the shore, not run on into the creek.
+      // (Only near the shore or over water: elsewhere one piece per segment keeps the vertex count down.)
+      let fine = shoreDistance(ax, ay) < Infinity || shoreDistance(bx, by) < Infinity;
+      for (let n = 0, count = Math.ceil(seg / 5); !fine && n <= count; n++) fine = isWater(ax + ((bx - ax) * n) / count, ay + ((by - ay) * n) / count);
+      const pieces = fine ? Math.max(1, Math.ceil(seg / 2.5)) : 1;
+      for (let k = 0; k < pieces; k++) {
+        const t0 = k / pieces, t1 = (k + 1) / pieces;
+        const x0 = ax + (bx - ax) * t0, y0 = ay + (by - ay) * t0, x1 = ax + (bx - ax) * t1, y1 = ay + (by - ay) * t1;
+        if (isWater((x0 + x1) / 2, (y0 + y1) / 2)) continue;
+        const o0 = [oa[0] + (ob[0] - oa[0]) * t0, oa[1] + (ob[1] - oa[1]) * t0], o1 = [oa[0] + (ob[0] - oa[0]) * t1, oa[1] + (ob[1] - oa[1]) * t1];
+        // Shared (mitered) edge vertices: the ribbon is continuous through bends.
+        const v = [[x0 - o0[0], y0 - o0[1], cum + seg * t0, -w], [x1 - o1[0], y1 - o1[1], cum + seg * t1, -w], [x1 + o1[0], y1 + o1[1], cum + seg * t1, w], [x0 + o0[0], y0 + o0[1], cum + seg * t0, w]];
+        for (const kk of [0, 1, 2, 0, 2, 3]) {
+          const [x, y, a2, c] = v[kk];
+          // On or beside the seawall: ride the deck and its slope, so the path and the deck are one surface.
+          pos.push(x, Math.max(0.1 + heightAt(x, y), deckHeight(shoreDistance(x, y)) + 0.03), -y); arc.push(a2); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
+        }
       }
       // Path lights (footpaths only), every lampSpacing metres along the arc.
       if (!p.cycle) {

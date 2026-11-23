@@ -4,6 +4,8 @@
  * Three.js world: X = x, Y = up, Z = -y.
  */
 
+import { roundCorners } from './smooth.js';
+
 const decodeRing = (flat, from = 0) => {
   const pts = [];
   let x = 0, y = 0;
@@ -94,7 +96,8 @@ export async function loadSkyline(url) {
 
   return {
     buildings, landmarks,
-    shoreline: raw.shoreline.map((l) => decodeRing(l)),
+    // Map outlines are angular: round the corners (shoreline stair-steps, polygonal loops and bends in paths and streets).
+    shoreline: raw.shoreline.map((l) => { const r = decodeRing(l); const closed = Math.hypot(r[0][0] - r[r.length - 1][0], r[0][1] - r[r.length - 1][1]) < 1.5; return roundCorners(r, { radius: 5, closed, samples: 3 }); }),
     waterMask: decodeWaterMask(raw.waterMask),
     terrain: decodeTerrain(raw.terrain),
     bridges: (raw.bridges ?? []).map((b) => ({ id: b.id, line: b.line.map((p) => p.map((v) => v / 10)) })),
@@ -102,15 +105,15 @@ export async function loadSkyline(url) {
     docks: (raw.docks ?? []).map((l) => decodeRing(l)),
     boats: (raw.boats ?? []).map(([x, y, a, len, kind]) => ({ x: x / 10, y: y / 10, heading: (a / 1800) * Math.PI, length: len / 10, sail: kind === 1 })),
     southTerrain: raw.southTerrain ?? null,
-    causeways: (raw.causeways ?? []).map((c) => c.map((v) => v / 10)),
+    causeways: (raw.causeways ?? []).map((flat) => decodeRing(flat.map((v, i) => (i < 2 ? v : v - flat[i - 2]))).filter(Boolean)),
     granville: {
       buildings: (raw.granville?.buildings ?? []).map((b) => ({ h: b[0] / 10, base: b[1] / 10, ring: decodeRing(b, 2) })),
       silos: (raw.granville?.silos ?? []).map(([x, y, r, h]) => ({ c: [x / 10, y / 10], r: r / 10, h: h / 10 })),
     },
     signatures: (raw.signatures ?? []).map((sg) => ({ id: sg.id, height: sg.height, ring: decodeRing(sg.ring) })),
     viaducts: (raw.viaducts ?? []).map((l) => decodeRing(l)),
-    roads: (raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: decodeRing(line) })),
-    paths: (raw.paths ?? []).map(([cls, ...line]) => ({ cycle: cls === 1, line: decodeRing(line) })),
+    roads: (raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: roundCorners(decodeRing(line), { radius: 7 }) })),
+    paths: (raw.paths ?? []).map(([cls, ...line]) => { const r = decodeRing(line); const closed = r.length > 3 && Math.hypot(r[0][0] - r[r.length - 1][0], r[0][1] - r[r.length - 1][1]) < 1.5; return { cycle: cls === 1, line: roundCorners(r, { radius: 4, closed, samples: 4 }) }; }),
     greens: (raw.greens ?? []).map(([kind, ...ring]) => ({ kind, ring: decodeRing(ring) })),
     trees: raw.trees ? decodeRing(raw.trees) : [],
     raw,

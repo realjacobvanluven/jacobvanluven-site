@@ -34,13 +34,18 @@ export function createIslands(shoreline, causeways, uniforms) {
     for (const [i, j, k] of idx) tri(P(ring[i][0], ring[i][1], GROUND), P(ring[j][0], ring[j][1], GROUND), P(ring[k][0], ring[k][1], GROUND), 1);
   }
 
-  // Causeways: a rock mound with a paved path along the top, a little past each end so it overlaps the shore.
-  for (const [ax, ay, bx, by] of causeways) {
-    const len = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / len, uy = (by - ay) / len, nx = -uy, ny = ux;
-    const x0 = ax - ux * 4, y0 = ay - uy * 4, x1 = bx + ux * 4, y1 = by + uy * 4;
-    const sec = (x, y) => [[-4, -0.7], [-2.3, CREST + 0.25], [-1, CREST + 0.3], [1, CREST + 0.3], [2.3, CREST + 0.25], [4, -0.7]].map(([o, h]) => P(x + nx * o, y + ny * o, h));
-    const A = sec(x0, y0), B = sec(x1, y1);
-    for (let k = 0; k < 5; k++) { const paved = k === 2 ? 2 : 0; tri(A[k], B[k], B[k + 1], paved); tri(A[k], B[k + 1], A[k + 1], paved); }
+  // Causeways: a rock mound with a paved path along the top, following the mapped path across the water (a polyline), a few
+  // metres past each end so it overlaps the shore.
+  for (const line of causeways) {
+    if (line.length < 2) continue;
+    // Profile across the mound: [offset, height] from one toe to the other.
+    const profile = [[-4, -0.7], [-2.3, CREST + 0.25], [-1, CREST + 0.3], [1, CREST + 0.3], [2.3, CREST + 0.25], [4, -0.7]];
+    const rows = profile.map(([o]) => miterOffsets(line, o)); // right offsets: p + offset
+    const at = (i, k) => P(line[i][0] + rows[k][i][0], line[i][1] + rows[k][i][1], profile[k][1]);
+    for (let i = 1; i < line.length; i++) for (let k = 0; k < 5; k++) {
+      const kind2 = k === 2 ? 2 : 0;
+      tri(at(i - 1, k), at(i, k), at(i, k + 1), kind2); tri(at(i - 1, k), at(i, k + 1), at(i - 1, k + 1), kind2);
+    }
   }
 
   const geo = new THREE.BufferGeometry();

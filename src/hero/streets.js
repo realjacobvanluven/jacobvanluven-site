@@ -115,6 +115,32 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     }
   }
 
+  // Cul-de-sacs: a local street that stops in the middle of nowhere ends in a rounded turnaround with a kerb and a planted
+  // island, instead of a squared-off ribbon.
+  const turnarounds = [];
+  {
+    const CELL = 8, grid = new Map();
+    const key = (i, j) => `${i},${j}`;
+    roads.forEach((r, ri) => r.line.forEach((p) => { const k = key(Math.floor(p[0] / CELL), Math.floor(p[1] / CELL)); (grid.get(k) ?? grid.set(k, []).get(k)).push([ri, p]); }));
+    const lonely = (p, self) => {
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [ri, q] of grid.get(key(Math.floor(p[0] / CELL) + i, Math.floor(p[1] / CELL) + j)) ?? []) {
+        if (ri !== self && Math.hypot(p[0] - q[0], p[1] - q[1]) < 7) return false;
+      }
+      return true;
+    };
+    roads.forEach((road, ri) => {
+      if (road.main || road.line.length < 2 || isWater(...road.line[0]) && isWater(...road.line[road.line.length - 1])) return;
+      for (const end of [0, 1]) {
+        const p = end ? road.line[road.line.length - 1] : road.line[0], q = end ? road.line[road.line.length - 2] : road.line[1];
+        if (Math.hypot(p[0] - camera[0], p[1] - camera[1]) > ribbonDistance || !lonely(p, ri) || isWater(p[0], p[1])) continue;
+        const len = Math.hypot(p[0] - q[0], p[1] - q[1]) || 1;
+        // Is the end beside the shoreline or a bridge approach? Those are real road ends too, so nothing is special-cased.
+        turnarounds.push({ x: p[0] + ((p[0] - q[0]) / len) * 1.5, y: p[1] + ((p[1] - q[1]) / len) * 1.5, r: 9 });
+      }
+    });
+  }
+  const bulbs = turnarounds.length ? createTurnarounds(turnarounds, uniforms, heightAt) : null;
+
   const carLights = [];
   for (const lane of lanes) for (let i = 0; i < lane.cars.length * 2; i++) carLights.push({ p: [0, 0, 0], color: lane.color, size: lane.size });
   const bodyCount = lanes.reduce((n, l) => n + (l.bodies ? l.cars.length : 0), 0);
@@ -196,7 +222,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
   const surface = new THREE.Mesh(g, material);
   surface.renderOrder = 1;
 
-  return { lamps, carLights, updateTraffic, surface, bodies: bodies?.mesh ?? null, stats: { lamps: lamps.length, cars: carLights.length / 2, carBodies: bodyCount, ribbonTriangles: rib.pos.length / 9 } };
+  return { lamps, carLights, updateTraffic, surface, bulbs, bodies: bodies?.mesh ?? null, stats: { lamps: lamps.length, cars: carLights.length / 2, carBodies: bodyCount, ribbonTriangles: rib.pos.length / 9 } };
 }
 
 /**
@@ -252,4 +278,55 @@ export function createCarBodies(count, uniforms, rand) {
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   mesh.frustumCulled = false; // instances move every frame
   return { mesh };
+}
+
+/** Rounded cul-de-sac ends: asphalt disc, a kerb ring, and a planted island in the middle. */
+function createTurnarounds(list, uniforms, heightAt) {
+  const pos = [], aR = [];
+  const N = 28;
+  for (const t of list) {
+    const y = 0.125 + heightAt(t.x, t.y);
+    for (let i = 0; i < N; i++) {
+      const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1) / N) * Math.PI * 2;
+      pos.push(t.x, y, -t.y, t.x + Math.cos(a0) * t.r, y, -(t.y + Math.sin(a0) * t.r), t.x + Math.cos(a1) * t.r, y, -(t.y + Math.sin(a1) * t.r));
+      aR.push(0, 1, 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('aR', new THREE.Float32BufferAttribute(aR, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+    vertexShader: /* glsl */ `
+      attribute float aR; varying vec3 vWorld; varying float vR;
+      void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; vR = aR; gl_Position = projectionMatrix * viewMatrix * w; }
+    `,
+    fragmentShader: /* glsl */ `
+      ${skyGlsl}
+      ${hashGlsl}
+      ${fogGlsl}
+      varying vec3 vWorld; varying float vR;
+      void main() {
+        float grit = 0.85 + 0.3 * hash12(floor(vWorld.xz * 2.0));
+        vec3 asphalt = vec3(0.026, 0.027, 0.031) * grit;
+        vec3 kerb = vec3(0.075, 0.073, 0.07);
+        vec3 grass = vec3(0.012, 0.024, 0.013) * grit;
+        float island = 1.0 - smoothstep(0.26, 0.3, vR);
+        float ring = smoothstep(0.84, 0.88, vR) * (1.0 - smoothstep(0.94, 0.98, vR));
+        float islandKerb = smoothstep(0.26, 0.3, vR) * (1.0 - smoothstep(0.3, 0.34, vR));
+        vec3 col = mix(asphalt, kerb, ring);
+        col = mix(col, kerb, islandKerb);
+        col = mix(col, grass, island);
+        col += vec3(1.0, 0.8, 0.6) * 0.012; // a little street-light wash
+        gl_FragColor = vec4(applyFog(col, vWorld), 1.0 - smoothstep(0.97, 1.0, vR));
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 2;
+  return mesh;
 }
