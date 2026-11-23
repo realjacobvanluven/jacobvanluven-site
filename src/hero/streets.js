@@ -200,7 +200,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
  * Car bodies (instanced): a low body and a glass cabin, about 4.4 × 1.8 m. Paint colours are mostly dark,
  * greys and whites with the odd red or blue; roofs and glass pick up the sky, sides catch street light.
  */
-function createCarBodies(count, uniforms, rand) {
+export function createCarBodies(count, uniforms, rand) {
   const box = (w, h, d, y, part) => {
     const g = new THREE.BoxGeometry(w, h, d);
     g.translate(0, y + h / 2, 0);

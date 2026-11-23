@@ -122,6 +122,16 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   plate girders on X-braced concrete portal piers, outboard sidewalks, and its raised south approach plus off-/on-ramps
   (`ramps` in the data, chained from OSM ways). Structure and heights are approximate. The building crop now reaches 252°
   (the pan limit) so the west bank around the bridges has buildings. Scenery only, no hotspots.
+- **South bank and Granville Island (2026-11-22):** the data now keeps the whole south bank of False Creek (land connected to
+  the south edge of the water mask, west of the creek head, found by flood fill in `scripts/build-skyline-data.mjs`; download box
+  runs ~900 m south of the camera) with ground elevation added to building heights so the Fairview slopes rise. Pan now reaches
+  250° (Granville Island) and tilt down to −30°. `src/hero/granville.js` hand-builds Granville Island (federal land, so OSM only):
+  painted industrial sheds with lit shopfronts, market halls with a glazed clerestory, and the eight Ocean Concrete silos, all
+  from OSM footprints (own `granville` section of the data file; colours and shapes approximate). `src/hero/southbank.js` adds
+  seawall railings and benches, parked cars and street trees along local streets, and walkers and cyclists (cyclists carry a
+  front light) on the paths, all sized per device (`SCENE_DETAIL.southBank` in `scene.js`). Scenery only, no hotspots.
+  Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
+  (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange
   stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
   (`summary` prop in `src/pages/index.astro`), then the headline and subheading.

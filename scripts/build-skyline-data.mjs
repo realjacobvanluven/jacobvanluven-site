@@ -41,8 +41,20 @@ const CAMERA = { lat: 49.27175, lon: -123.1078 };
 /** Crop wedge: keep buildings within these compass bearings (clockwise, wrapping through north) of APEX.
  *  APEX sits ~130 m inland of the camera so the wedge is wide enough at the shoreline. */
 const VIEW = { apex: { lat: 49.2706, lon: -123.1078 }, fromBearing: 252, toBearing: 65, maxDistance: 3000, minNorth: -400 };
-/** Download box (lat/lon) that safely contains the wedge. */
-const BBOX = { south: 49.268, west: -123.15, north: 49.2975, east: -123.08 };
+/** Download box (lat/lon) that safely contains the wedge and the south bank (down to ~900 m south of the camera). */
+const BBOX = { south: 49.2635, west: -123.15, north: 49.2975, east: -123.08 };
+/** Bump when BBOX changes: the downloads are cached by name. */
+const CACHE_V = 'v2';
+/**
+ * The south bank of False Creek (added 2026-11-22): everything on the land south of the creek, west of the creek head,
+ * is kept regardless of the wedge, so tilting the view down shows real neighbourhoods. It is found by flood-filling the
+ * land/water mask from the south edge (so it never leaks across the water to the north bank).
+ */
+const SOUTH_BANK = { x0: -2800, x1: 480, y0: -800, y1: 420, cell: 8 };
+/** Granville Island: a box (it can be cut off from the mainland by the mask); hand-built in src/hero/granville.js. */
+const GRANVILLE = { x0: -2300, x1: -1765, y0: -285, y1: 135 };
+/** Ground elevation for the south bank (m above sea level), added to building heights so the Fairview slopes rise. */
+const SOUTH_ELEVATION = { x0: -2800, x1: 600, y0: -800, y1: 300, step: 40 };
 
 // ---- Tuning -----------------------------------------------------------------------------------------
 const MIN_AREA = 15; // m², drop sheds and slivers
@@ -141,7 +153,11 @@ function bearingDistance([x, y]) {
 }
 
 const APEX = toLocal([VIEW.apex.lon, VIEW.apex.lat]);
-function inView([x, y]) {
+const inGranville = ([x, y]) => x >= GRANVILLE.x0 && x <= GRANVILLE.x1 && y >= GRANVILLE.y0 && y <= GRANVILLE.y1;
+/** Set once the land/water mask exists (see "South bank" below). */
+let southBank = () => false;
+function inView(p) { return inWedge(p) || southBank(p); }
+function inWedge([x, y]) {
   const point = [x - APEX[0], y - APEX[1]];
   const { bearing, distance } = bearingDistance(point);
   const inArc = VIEW.fromBearing > VIEW.toBearing
@@ -180,7 +196,7 @@ async function getJson(url, init = {}) {
 function cityFootprints(year) {
   const where = `in_bbox(geo_point_2d, ${BBOX.south}, ${BBOX.west}, ${BBOX.north}, ${BBOX.east})`;
   const url = `https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/building-footprints-${year}/exports/geojson?where=${encodeURIComponent(where)}`;
-  return cached(`city-footprints-${year}.geojson`, () => getJson(url));
+  return cached(`city-footprints-${year}-${CACHE_V}.geojson`, () => getJson(url));
 }
 
 /** Runs an Overpass query (cached). Public servers are often busy: try each mirror, twice. */
@@ -210,7 +226,7 @@ function overpass(name, query) {
 function osm() {
   const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
   const names = LANDMARKS.map((l) => l.osm).join('|');
-  return overpass('osm.json', `[out:json][timeout:120];
+  return overpass(`osm-${CACHE_V}.json`, `[out:json][timeout:120];
 (
   way["building"](${b}); relation["building"](${b});
   way["building:part"](${b}); relation["building:part"](${b});
@@ -235,7 +251,7 @@ out tags geom;`);
 /** Downtown streets (for streetlights and traffic). */
 function osmRoads() {
   const b = `${BBOX.south},${BBOX.west},${BBOX.north},${BBOX.east}`;
-  return overpass('osm-roads.json', `[out:json][timeout:90];
+  return overpass(`osm-roads-${CACHE_V}.json`, `[out:json][timeout:90];
 way["highway"~"^(trunk|primary|secondary|tertiary|residential|unclassified)$"](${b});
 out tags geom;`);
 }
@@ -338,6 +354,7 @@ const p09 = cityRings(fc2009, true).filter((p) => p.h);
 
 const osmBuildings = [];
 const osmParts = [];
+const silos = [];
 const coastline = [];
 const landmarks = {};
 for (const el of osmData.elements) {
@@ -356,6 +373,16 @@ for (const el of osmData.elements) {
   }
   const isPart = Boolean(t['building:part']) && !t.building;
   if (!t.building && !isPart) continue;
+  // Granville Island's Ocean Concrete silos: hand-built in the scene (position, radius, height).
+  if (t.man_made === 'storage_tank') {
+    for (const raw of osmRings(el)) {
+      const ring = cleanRing(raw);
+      if (!ring) continue;
+      const [cx, cy] = centroid(ring), [x0, y0, x1, y1] = bounds(ring);
+      if (inGranville([cx, cy])) silos.push({ c: [cx, cy], r: (x1 - x0 + (y1 - y0)) / 4, h: metres(t.height) ?? 30 });
+    }
+    continue;
+  }
   for (const raw of osmRings(el)) {
     const ring = cleanRing(raw);
     if (!ring || area(ring) < MIN_AREA) continue;
@@ -422,8 +449,60 @@ for (const b of osmBuildings) {
   stats.osmNew++;
 }
 
-// Crop to the view wedge.
-const kept = out.filter((o) => inView(centroid(o.ring)));
+// ---- South bank --------------------------------------------------------------------------------------
+// The land/water mask (needed for the scene anyway) comes first: the south bank is the land connected to the
+// south edge of SOUTH_BANK, found by flood-filling a coarse grid of mask samples.
+const shoreLines = coastline
+  .map((line) => line.filter(([x, y]) => Math.abs(x) < 3700 && y > -900 && y < 3500))
+  .filter((line) => line.length > 1)
+  .map((line) => simplify(line, 1));
+const mask = buildWaterMask(shoreLines, MASK);
+{
+  const { x0, x1, y0, y1, cell } = SOUTH_BANK;
+  const W = Math.round((x1 - x0) / cell), H = Math.round((y1 - y0) / cell);
+  const land = (i, j) => !mask.isWater(x0 + (i + 0.5) * cell, y0 + (j + 0.5) * cell);
+  const reached = new Uint8Array(W * H);
+  const stack = [];
+  for (let i = 0; i < W; i++) if (land(i, 0)) { reached[i] = 1; stack.push(i, 0); }
+  while (stack.length) {
+    const j = stack.pop(), i = stack.pop();
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const a = i + di, b = j + dj;
+      if (a < 0 || b < 0 || a >= W || b >= H || reached[b * W + a] || !land(a, b)) continue;
+      reached[b * W + a] = 1;
+      stack.push(a, b);
+    }
+  }
+  southBank = ([x, y]) => {
+    if (inGranville([x, y])) return true;
+    const i = Math.floor((x - x0) / cell), j = Math.floor((y - y0) / cell);
+    return i >= 0 && j >= 0 && i < W && j < H && reached[j * W + i] === 1;
+  };
+  console.log('South bank:', reached.reduce((n, v) => n + v, 0) * cell * cell / 1e6, 'km² of land');
+}
+
+// Ground elevation under the south bank (Terrarium/CDEM), bilinear lookup.
+const elev = await sampleTerrain(SOUTH_ELEVATION, toLonLat, cachedBinary, USER_AGENT);
+const elevAt = ([x, y]) => {
+  const fx = (x - SOUTH_ELEVATION.x0) / SOUTH_ELEVATION.step, fy = (y - SOUTH_ELEVATION.y0) / SOUTH_ELEVATION.step;
+  const i = Math.max(0, Math.min(elev.cols - 2, Math.floor(fx))), j = Math.max(0, Math.min(elev.rows - 2, Math.floor(fy)));
+  const ax = Math.max(0, Math.min(1, fx - i)), ay = Math.max(0, Math.min(1, fy - j));
+  const e = (a, b) => Math.max(0, elev.heights[b * elev.cols + a]);
+  return (e(i, j) * (1 - ax) + e(i + 1, j) * ax) * (1 - ay) + (e(i, j + 1) * (1 - ax) + e(i + 1, j + 1) * ax) * ay;
+};
+
+// Crop to the view wedge + the south bank. South-bank buildings stand on rising ground: their height includes it.
+const southBankBuildings = new Set();
+const kept = [];
+for (const o of out) {
+  const c = centroid(o.ring);
+  if (!inView(c)) continue;
+  if (southBank(c)) { o.h += elevAt(c); southBankBuildings.add(o); }
+  kept.push(o);
+}
+// Granville Island's buildings are hand-built in the scene (own section of the data file, not the generic list).
+const granvilleBuildings = kept.filter((o) => inGranville(centroid(o.ring)));
+const mainKept = kept.filter((o) => !inGranville(centroid(o.ring)));
 
 // ---- Encode -----------------------------------------------------------------------------------------
 // Compact format: integer decimetres; each ring is delta-encoded [x0, y0, dx1, dy1, ...].
@@ -446,10 +525,6 @@ for (const l of LANDMARKS) {
   if (l.id === 'rogers-arena') landmarkOut[l.id].ring = encodeRing(cleanRing(found.points));
 }
 
-const shoreLines = coastline
-  .map((line) => line.filter(([x, y]) => Math.abs(x) < 3700 && y > -900 && y < 3500))
-  .filter((line) => line.length > 1)
-  .map((line) => simplify(line, 1));
 const shore = shoreLines.map(encodeRing);
 
 // ---- Extras -----------------------------------------------------------------------------------------
@@ -512,8 +587,6 @@ const viaducts = Object.values(VIADUCT_CHAINS).map((ids) => {
   return encodeRing(simplify(pts, 0.6));
 });
 
-const mask = buildWaterMask(shoreLines, MASK);
-
 // SkyTrain Expo Line: one continuous centreline from the east edge of the view through Main Street–Science
 // World station to the Dunsmuir tunnel portal past Stadium–Chinatown (chained from one track's OSM ways),
 // with a height per point: elevated on the viaduct (~9 m), ramping down to the portal.
@@ -556,7 +629,7 @@ console.log('SkyTrain:', skytrainLine.length, 'points', skytrainStations.map((s)
 
 // Waterfront/park detail near the camera (the most visible ground): paths, green areas, trees.
 const GROUND_RANGE = 1800;
-const nearView = (p) => inView(p) && Math.hypot(...p) < GROUND_RANGE;
+const nearView = (p) => inView(p) && (Math.hypot(...p) < GROUND_RANGE || southBank(p));
 const paths = [];
 const greens = [];
 const treePts = [];
@@ -675,7 +748,7 @@ const data = {
   units: 'decimetres; x east, y north, from origin; rings delta-encoded',
   sources: SRC,
   // [heightDm, baseDm, sourceIndex, ...ring]
-  buildings: kept.map((o) => [dm(o.h), dm(o.base), SRC.indexOf(o.src), ...encodeRing(o.ring)]),
+  buildings: mainKept.map((o) => [dm(o.h), dm(o.base), SRC.indexOf(o.src), ...encodeRing(o.ring)]),
   landmarks: landmarkOut,
   shoreline: shore,
   waterMask: { ...MASK, width: mask.width, height: mask.height, rows: mask.rows },
@@ -688,6 +761,12 @@ const data = {
   // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
   boats,
   signatures,
+  // Granville Island (hand-built in src/hero/granville.js): its buildings [heightDm, baseDm, ...ring] and the Ocean
+  // Concrete silos [xDm, yDm, radiusDm, heightDm].
+  granville: {
+    buildings: granvilleBuildings.map((o) => [dm(o.h), dm(o.base), ...encodeRing(o.ring)]),
+    silos: silos.map((t) => [dm(t.c[0]), dm(t.c[1]), dm(t.r), dm(t.h)]),
+  },
   // [class, ...line] (class 0 main road, 1 local street)
   roads,
   // Georgia and Dunsmuir Viaduct centrelines (delta-encoded, west → east)
@@ -708,6 +787,7 @@ await writeFile(OUT, json);
 const bySrc = Object.fromEntries(SRC.map((s) => [s, kept.filter((o) => o.src === s).length]));
 console.log('2015 footprints:', f15.length, '| 2009 parts with height:', p09.length, '| OSM buildings:', osmBuildings.length, 'parts:', osmParts.length);
 console.log('Decisions:', stats);
+console.log('South bank buildings:', southBankBuildings.size, '| Granville Island:', granvilleBuildings.length, 'buildings,', silos.length, 'silos');
 console.log('Kept in view:', kept.length, 'prisms', bySrc);
 console.log('Tallest:', kept.sort((a, b) => b.h - a.h).slice(0, 8).map((o) => `${o.h.toFixed(0)}m(${o.src})`).join(', '));
 console.log('Landmarks:', Object.keys(landmarkOut).join(', '));

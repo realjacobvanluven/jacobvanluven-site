@@ -25,7 +25,7 @@
 <body>
 <canvas id="c"></canvas>
 <script type="module">
-import { createSkylineScene } from '/src/hero/scene.js';
+import { createSkylineScene, CAMERA_POSITION } from '/src/hero/scene.js';
 import { startHero } from '/src/hero/runtime.js';
 
 const params = new URLSearchParams(location.search);
@@ -33,6 +33,8 @@ const layout = params.get('preset') ?? 'desktop';
 // &w=…&h=…&dpr=… override the size (used to render the homepage posters).
 const [width, height] = params.get('w') ? [+params.get('w'), +params.get('h')] : layout === 'phone' ? [375, 812] : [1600, 900];
 const dprOverride = params.get('dpr') ? +params.get('dpr') : null;
+// &cx=…&cy=… (local metres from the Olympic Village seawall) moves the camera, for close-ups elsewhere (debugging only).
+if (params.get('cx')) { CAMERA_POSITION[0] = +params.get('cx'); CAMERA_POSITION[1] = +(params.get('cy') ?? 0); }
 const canvas = document.getElementById('c');
 canvas.style.width = width + 'px';
 canvas.style.height = height + 'px';
@@ -112,6 +114,11 @@ try {
   }
 } catch (e) {
   window.__result = { png: '', error: String((e && e.stack) || e), log: window.__log };
+  // Show the failure on the page too, so a headless screenshot says what went wrong.
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'position:fixed;inset:0;margin:0;padding:12px;color:#ff8a4a;background:#000;font:12px monospace;white-space:pre-wrap;z-index:9';
+  pre.textContent = window.__result.error + '\n' + (window.__log || []).join('\n');
+  document.body.append(pre);
 }
 </script>
 </body>

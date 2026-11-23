@@ -101,6 +101,10 @@ export async function loadSkyline(url) {
     ramps: (raw.ramps ?? []).map((r) => ({ ...r, line: r.line.map((p) => p.map((v) => v / 10)) })),
     docks: (raw.docks ?? []).map((l) => decodeRing(l)),
     boats: (raw.boats ?? []).map(([x, y, a, len, kind]) => ({ x: x / 10, y: y / 10, heading: (a / 1800) * Math.PI, length: len / 10, sail: kind === 1 })),
+    granville: {
+      buildings: (raw.granville?.buildings ?? []).map((b) => ({ h: b[0] / 10, base: b[1] / 10, ring: decodeRing(b, 2) })),
+      silos: (raw.granville?.silos ?? []).map(([x, y, r, h]) => ({ c: [x / 10, y / 10], r: r / 10, h: h / 10 })),
+    },
     signatures: (raw.signatures ?? []).map((sg) => ({ id: sg.id, height: sg.height, ring: decodeRing(sg.ring) })),
     viaducts: (raw.viaducts ?? []).map((l) => decodeRing(l)),
     roads: (raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: decodeRing(line) })),

@@ -3,6 +3,8 @@ import { loadSkyline } from './skyline-data.js';
 import { skyGlsl, sunDirection } from './shaders.js';
 import { createBuildings, createFacadeMaterial } from './buildings.js';
 import { createSignatures } from './signatures.js';
+import { createGranville } from './granville.js';
+import { createSouthBank } from './southbank.js';
 import { createStreets } from './streets.js';
 import { createWaterfront } from './waterfront.js';
 import { createWater, createGround } from './water.js';
@@ -57,8 +59,10 @@ export const framingFor = (aspect) => (aspect < 1 ? FRAMING.phone : FRAMING.desk
 export const TURN_BEARING = { desktop: 38, phone: 56 };
 
 const SCENE_DETAIL = {
-  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600, planeScale: 1.6 },
-  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000, planeScale: 2.8 },
+  desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600, planeScale: 1.6,
+    southBank: { furnitureDistance: 900, parkedDistance: 850, maxParked: 700, streetTrees: 1400, peopleDistance: 480, walkers: 80, cyclists: 18 } },
+  phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000, planeScale: 2.8,
+    southBank: { furnitureDistance: 500, parkedDistance: 450, maxParked: 180, streetTrees: 400, peopleDistance: 320, walkers: 26, cyclists: 7 } },
 };
 
 function insideRing([x, y], r) {
@@ -209,6 +213,11 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const addLights = (list, priority) => list.forEach((l) => lights.push({ ...l, priority }));
   addLights(signatures.crownLights, 0);
 
+  // Granville Island: painted sheds, market halls and the Ocean Concrete silos (scenery only).
+  const granville = createGranville(data.granville, uniforms);
+  scene.add(granville.group);
+  addLights(granville.lights, 2);
+
   let bcUpdate = null;
   if (L.bcPlace) {
     const bc = bcPlace(L.bcPlace, envMap);
@@ -276,6 +285,18 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     const sp = streetTraffic.geometry.attributes.position;
     animators.push((time) => { streets.updateTraffic(sp.array, time); sp.needsUpdate = true; });
   }
+  // South-bank street life: seawall railings and benches, parked cars, street trees, walkers and cyclists.
+  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList, detail: detail.southBank });
+  scene.add(southBank.group);
+  animators.push(southBank.update);
+  if (southBank.cyclistLights.length) {
+    const bikeLights = createLightPoints(southBank.cyclistLights, uniforms);
+    bikeLights.frustumCulled = false;
+    scene.add(bikeLights);
+    const bp = bikeLights.geometry.attributes.position;
+    animators.push((time) => { southBank.updateLights(bp.array, time); bp.needsUpdate = true; });
+  }
+
   // Cambie, Granville and Burrard Bridges, up False Creek to the west.
   for (const spec of data.bridges) {
     const br = createBridge({ ...spec, ramps: data.ramps.filter((r) => r.bridge === spec.id) }, { isWater, envMap });
@@ -442,7 +463,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, granville: granville.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {

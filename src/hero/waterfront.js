@@ -128,7 +128,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing }) {
 }
 
 /** Mapped trees: low-poly crowns with a dark trunk, lit warm from below near the paths. */
-function createTrees(trees, uniforms, { max }) {
+export function createTrees(trees, uniforms, { max }) {
   const list = trees.slice(0, max);
   const crownGeo = new THREE.IcosahedronGeometry(1, 1);
   const mat = new THREE.ShaderMaterial({
