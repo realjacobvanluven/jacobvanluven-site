@@ -46,7 +46,7 @@ export function createTerrain(terrain, uniforms) {
   geo.setIndex(idx);
   const mat = new THREE.ShaderMaterial({
     uniforms,
-    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, // wins over the flat ground where they meet
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, // wins over the flat ground where they meet (ground decal stack, bottom to top: terrain -1, lawns -3, sidewalks -4, streets -5, paths -6, turnarounds -7)
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }

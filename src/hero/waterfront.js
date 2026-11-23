@@ -17,7 +17,21 @@ function createGreens(greens, uniforms, heightAt = () => 0) {
     const contour = g.ring.map(([x, y]) => new THREE.Vector2(x, y));
     let tris;
     try { tris = THREE.ShapeUtils.triangulateShape(contour, []); } catch { continue; }
-    for (const t of tris) for (const i of t) { pos.push(g.ring[i][0], 0.06 + heightAt(g.ring[i][0], g.ring[i][1]), -g.ring[i][1]); kind.push(g.kind); }
+    // Lawns follow the terrain: the big flat triangles are split (midpoints) until no edge is longer than 10 m, and every corner
+    // takes the ground height there. Otherwise a lawn cuts through the streets and sidewalks that follow the slope exactly.
+    const emit = (a, b, c, depth) => {
+      const la = Math.hypot(b[0] - a[0], b[1] - a[1]), lb = Math.hypot(c[0] - b[0], c[1] - b[1]), lc = Math.hypot(a[0] - c[0], a[1] - c[1]);
+      const longest = Math.max(la, lb, lc);
+      if (longest > 10 && depth < 7) {
+        const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+        if (longest === la) { const m = mid(a, b); emit(a, m, c, depth + 1); emit(m, b, c, depth + 1); }
+        else if (longest === lb) { const m = mid(b, c); emit(a, b, m, depth + 1); emit(a, m, c, depth + 1); }
+        else { const m = mid(c, a); emit(a, b, m, depth + 1); emit(m, b, c, depth + 1); }
+        return;
+      }
+      for (const p of [a, b, c]) { pos.push(p[0], 0.04 + heightAt(p[0], p[1]), -p[1]); kind.push(g.kind); }
+    };
+    for (const t of tris) emit(g.ring[t[0]], g.ring[t[1]], g.ring[t[2]], 0);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -25,7 +39,7 @@ function createGreens(greens, uniforms, heightAt = () => 0) {
   const mat = new THREE.ShaderMaterial({
     uniforms,
     side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
     vertexShader: /* glsl */ `
       attribute float aKind; varying float vKind; varying vec3 vWorld;
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; vKind = aKind; gl_Position = projectionMatrix * viewMatrix * w; }
@@ -139,7 +153,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
     side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6,
     vertexShader: /* glsl */ `
       attribute float aArc; attribute float aAcross; attribute float aHalf; attribute float aCycle; attribute float aFree;
       varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vHalf; varying float vCycle; varying float vFree;

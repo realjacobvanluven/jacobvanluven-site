@@ -27,7 +27,9 @@ const GrainShader = {
 };
 
 export function createComposer(renderer, scene, camera, { width, height, pixelRatio, bloomScale = 0.5, samples = 4, bloom = {}, grain = 0.03 }) {
-  const target = new THREE.WebGLRenderTarget(width * pixelRatio, height * pixelRatio, { type: THREE.HalfFloatType, samples });
+  // A 24-bit depth texture: the default render-target depth buffer is only 16 bits, which at a few hundred metres cannot tell apart
+  // ground layers a few centimetres apart (lawns, sidewalks, streets, paths): they flickered and swapped places with the view angle.
+  const target = new THREE.WebGLRenderTarget(width * pixelRatio, height * pixelRatio, { type: THREE.HalfFloatType, samples, depthTexture: new THREE.DepthTexture(width * pixelRatio, height * pixelRatio) });
   const composer = new EffectComposer(renderer, target);
   composer.setPixelRatio(pixelRatio);
   composer.setSize(width, height);

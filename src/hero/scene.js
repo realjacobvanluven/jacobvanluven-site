@@ -124,7 +124,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
 
-  const camera = new THREE.PerspectiveCamera(framing.fov, width / height, 4, 40000);
+  const camera = new THREE.PerspectiveCamera(framing.fov, width / height, Math.max(1, cameraHeight * 0.1), 40000); // near plane scales with the camera height (100 m up: 10 m): more depth precision
   const aim = (bearing, pitch) => {
     const b = THREE.MathUtils.degToRad(bearing), p = THREE.MathUtils.degToRad(pitch);
     camera.position.set(CAMERA_POSITION[0], cameraHeight, -CAMERA_POSITION[1]);

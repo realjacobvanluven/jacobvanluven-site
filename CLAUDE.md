@@ -162,6 +162,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   car bodies are rounded boxes with a tapered cabin; square-cell noise (the blocky mosaic in paving, rock, asphalt and sidewalks) is
   replaced by smooth noise and cellular stones (`gfbm`, `worley` in `shaders.js`); Granville Island sheds get roof overhangs and
   rooftop vents.
+  Ninth pass (2026-11-22, layering): the post-processing render target now has a 24-bit depth texture (the default is 16-bit, which
+  cannot separate ground layers a few centimetres apart at a few hundred metres) and the camera's near plane scales with its height
+  (10 m at 100 m); the ground decals have one fixed depth-offset order, bottom to top: terrain -1, lawns -3, sidewalks -4, streets -5,
+  paths -6, turnarounds -7; lawns are split into ≤10 m triangles that follow the terrain; tiny closed street loops in the map (turning
+  circles and traffic islands, under 90 m) are drawn as one round turnaround, not as street ribbons (`loopBulbs` in `streets.js`).
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

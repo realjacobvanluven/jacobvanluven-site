@@ -20,6 +20,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
   // Street surfaces: ribbons along each road with the lamp layout encoded per vertex, so the shader can
   // paint pools of light exactly under the streetlights (aArc: distance along, aAcross: offset from centre).
   const rib = { pos: [], arc: [], across: [], phase: [], half: [] };
+  const loopBulbs = []; // tiny closed loops in the map: traffic islands and turning circles, drawn as round turnarounds, not as streets
 
   for (const road of roads) {
     const pts = road.line;
@@ -27,6 +28,13 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     const length = cum[cum.length - 1];
     if (length < 20) continue;
+    if (length < 90 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 3) {
+      // A closed loop this small is not a street: laying a 20 m wide street ribbon along it piles asphalt, kerbs and sidewalks on
+      // top of each other. Draw one round turnaround at its centre instead.
+      const cx = pts.reduce((t, p) => t + p[0], 0) / pts.length, cy = pts.reduce((t, p) => t + p[1], 0) / pts.length;
+      loopBulbs.push({ x: cx, y: cy, r: Math.max(8, length / (2 * Math.PI) + 5) });
+      continue;
+    }
     const pointAt = (s, offset) => {
       let i = 1;
       while (i < cum.length - 1 && cum[i] < s) i++;
@@ -122,7 +130,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
 
   // Cul-de-sacs: a local street that stops in the middle of nowhere ends in a rounded turnaround with a kerb and a planted
   // island, instead of a squared-off ribbon.
-  const turnarounds = [];
+  const turnarounds = [...loopBulbs];
   {
     const CELL = 8, grid = new Map();
     const key = (i, j) => `${i},${j}`;
@@ -188,7 +196,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
   const material = new THREE.ShaderMaterial({
     uniforms: { ...uniforms, uSpacing: { value: lampSpacing } },
     side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5,
     vertexShader: /* glsl */ `
       attribute float aArc; attribute float aAcross; attribute float aPhase; attribute float aHalf;
       varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vPhase; varying float vHalf;
@@ -232,7 +240,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
   const sidewalkMaterial = new THREE.ShaderMaterial({
     uniforms: { ...uniforms, uSpacing: { value: lampSpacing } },
     side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
     transparent: true,
     depthWrite: false,
     vertexShader: material.vertexShader,
@@ -348,7 +356,7 @@ function createTurnarounds(list, uniforms, heightAt) {
   const mat = new THREE.ShaderMaterial({
     uniforms,
     side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+    polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7,
     vertexShader: /* glsl */ `
       attribute float aR; varying vec3 vWorld; varying float vR;
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; vR = aR; gl_Position = projectionMatrix * viewMatrix * w; }
