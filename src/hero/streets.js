@@ -7,8 +7,9 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { skyGlsl, hashGlsl, groundGlsl, fogGlsl } from './shaders.js';
 import { miterOffsets } from './ribbon.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 2600, lampSpacing = 34, carSpacing = [18, 48], ribbonDistance = 2200, localTrafficDistance = 1300, bodyDistance = 1500, isWater = () => false, heightAt = () => 0 } = {}) {
   let seed = 77;
@@ -63,6 +64,10 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
       const k = 3.4 + rand() * 1.4;
       lamps.push({ p: [p[0], 8 + heightAt(p[0], p[1]), -p[1]], color: (sodium ? [1, 0.55, 0.2] : [1, 0.86, 0.68]).map((c) => c * k), size: 0.7 });
     }
+
+    // A closed loop (its ends meet) or a stub shorter than 70 m is a turnaround or a driveway, not a street: cars would only
+    // circle on it. No traffic there.
+    if (length < 70 || Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 3) continue;
 
     // Traffic: one lane each way on main roads; lighter traffic on local streets near the camera
     // (the waterfront, Olympic Village and around Science World).
@@ -196,6 +201,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       uniform float uSpacing;
       varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vPhase; varying float vHalf;
@@ -211,7 +217,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
         // Asphalt, a touch lighter in the middle; faint lane markings on wide roads.
         // The carriageway ends at the kerb (the kerb and sidewalk are their own layer, drawn beneath, so they never cut across a junction).
         float edge = 1.0 - smoothstep(vHalf - 0.5, vHalf - 0.25, abs(vAcross));
-        vec3 asphalt = vec3(0.022, 0.023, 0.027) * (0.85 + 0.3 * hash12(floor(vWorld.xz / 3.0)));
+        vec3 asphalt = vec3(0.022, 0.023, 0.027) * (0.82 + 0.36 * gfbm(vWorld.xz * 0.45));
         float marking = step(vHalf, 10.5) < 0.5 ? (1.0 - smoothstep(0.1, 0.25, abs(vAcross))) * step(0.5, fract(vArc / 6.0)) : 0.0;
         vec3 col = asphalt + lamp * pool * 0.28 + vec3(0.6) * marking * pool * 0.15;
         gl_FragColor = vec4(applyFog(col * edge, vWorld), edge);
@@ -233,6 +239,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       uniform float uSpacing;
       varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vPhase; varying float vHalf;
@@ -245,7 +252,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
         float side = mod(k, 2.0) < 0.5 ? 1.0 : -1.0;
         float across = vAcross - side * vHalf;
         float pool = exp(-(along * along * 0.8 + across * across) / (2.0 * 5.5 * 5.5));
-        float grain = 0.8 + 0.4 * hash12(floor(vWorld.xz * 2.5));
+        float grain = 0.82 + 0.36 * gfbm(vWorld.xz * 1.6);
         float joint = 1.0 - 0.2 * (1.0 - step(0.06, fract(vArc / 1.6)));
         float kerb = smoothstep(vHalf - 0.5, vHalf - 0.45, a) * (1.0 - smoothstep(vHalf - 0.02, vHalf + 0.04, a));
         vec3 base = mix(vec3(0.058, 0.056, 0.054) * joint, vec3(0.1, 0.098, 0.094), kerb) * grain;
@@ -265,13 +272,21 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
  * greys and whites with the odd red or blue; roofs and glass pick up the sky, sides catch street light.
  */
 export function createCarBodies(count, uniforms, rand) {
-  const box = (w, h, d, y, part) => {
-    const g = new THREE.BoxGeometry(w, h, d);
-    g.translate(0, y + h / 2, 0);
-    g.setAttribute('aPart', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count).fill(part), 1));
-    return g;
+  // Rounded boxes (soft edges and corners, not sharp cubes); the cabin is narrower at the roof and set back, so the car has a
+  // bonnet, a windscreen and a boot.
+  const box = (w, h, d, y, part, x = 0, radius = 0.22) => {
+    const g = new RoundedBoxGeometry(w, h, d, 2, Math.min(radius, h / 2.2, d / 2.2));
+    g.translate(x, y + h / 2, 0);
+    g.deleteAttribute('uv');
+    const ng = g; // RoundedBoxGeometry is already non-indexed
+    ng.setAttribute('aPart', new THREE.Float32BufferAttribute(new Array(ng.attributes.position.count).fill(part), 1));
+    return ng;
   };
-  const parts = [box(4.4, 0.75, 1.8, 0.25, 0), box(2.3, 0.55, 1.6, 1.0, 1)];
+  const cabin = box(2.1, 0.62, 1.55, 0.98, 1, -0.2, 0.3);
+  // Taper the cabin's roof: pull the top vertices in, so the windscreen and rear glass slope.
+  const cp = cabin.attributes.position;
+  for (let i = 0; i < cp.count; i++) if (cp.getY(i) > 1.35) { cp.setX(i, cp.getX(i) * 0.82); cp.setZ(i, cp.getZ(i) * 0.92); }
+  const parts = [box(4.4, 0.78, 1.8, 0.25, 0, 0, 0.3), cabin];
   const geo = mergeGeometries(parts);
   const paint = [[0.02, 0.02, 0.022], [0.05, 0.05, 0.055], [0.12, 0.12, 0.125], [0.3, 0.3, 0.3], [0.2, 0.02, 0.02], [0.02, 0.04, 0.1], [0.08, 0.08, 0.09]];
   const col = new Float32Array(count * 3);
@@ -341,10 +356,11 @@ function createTurnarounds(list, uniforms, heightAt) {
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       varying vec3 vWorld; varying float vR;
       void main() {
-        float grit = 0.85 + 0.3 * hash12(floor(vWorld.xz * 2.0));
+        float grit = 0.82 + 0.36 * gfbm(vWorld.xz * 1.2);
         vec3 asphalt = vec3(0.026, 0.027, 0.031) * grit;
         vec3 kerb = vec3(0.075, 0.073, 0.07);
         vec3 grass = vec3(0.012, 0.024, 0.013) * grit;

@@ -228,25 +228,47 @@ export function createSouthBank(data, uniforms, { camera, isWater, buildings, de
   const furniture = createSeawallFurniture(data.shoreline, { camera, distance: detail.furnitureDistance, isWater });
   group.add(furniture.group);
 
+  // Every street segment, for keeping parked cars out of junctions and turnarounds: a parked car must be on its own street and
+  // clear of any other street (and of the street's own ends, where a turnaround or a junction is).
+  const SEG = 24, segGrid = new Map();
+  const segKey = (i, j) => `${i},${j}`;
+  data.roads.forEach((r, id) => {
+    for (let k = 1; k < r.line.length; k++) {
+      const a = r.line[k - 1], b = r.line[k];
+      for (let i = Math.floor((Math.min(a[0], b[0]) - 14) / SEG); i <= Math.floor((Math.max(a[0], b[0]) + 14) / SEG); i++)
+        for (let j = Math.floor((Math.min(a[1], b[1]) - 14) / SEG); j <= Math.floor((Math.max(a[1], b[1]) + 14) / SEG); j++)
+          (segGrid.get(segKey(i, j)) ?? segGrid.set(segKey(i, j), []).get(segKey(i, j))).push([id, a, b]);
+    }
+  });
+  const nearOtherStreet = (x, y, own, reach) => {
+    for (const [id, a, b] of segGrid.get(segKey(Math.floor(x / SEG), Math.floor(y / SEG))) ?? []) {
+      if (id === own) continue;
+      const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2));
+      if (Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t) < reach) return true;
+    }
+    return false;
+  };
+
   // Parked cars along the local streets (one kerb lane each side, about half full) and street trees beyond them.
   const cars = [], treePts = [];
-  for (const road of data.roads) {
+  for (const [roadId, road] of data.roads.entries()) {
     if (road.main || road.line.length < 2 || !road.line.some(([x, y]) => dist(x, y) < detail.parkedDistance)) continue;
     const cum = cumulative(road.line), total = cum[cum.length - 1];
-    if (total < 25) continue;
+    if (total < 70 || Math.hypot(road.line[0][0] - road.line[road.line.length - 1][0], road.line[0][1] - road.line[road.line.length - 1][1]) < 3) continue; // loops and stubs: no parking
     for (const side of [1, -1]) {
-      for (let s = 8 + rand() * 4; s < total - 8; s += 6.4 + rand() * 1.6) {
+      for (let s = 15 + rand() * 4; s < total - 15; s += 6.4 + rand() * 1.6) {
         const p = sample(road.line, cum, s);
         if (dist(p.x, p.y) > detail.parkedDistance) continue;
         const x = p.x - p.uy * 4.6 * side, y = p.y + p.ux * 4.6 * side;
-        if (rand() < 0.5 || isWater(x, y) || blocked(x, y, 2.2)) continue;
+        if (rand() < 0.5 || isWater(x, y) || blocked(x, y, 2.2) || nearOtherStreet(x, y, roadId, 11)) continue;
         cars.push({ x, y, a: Math.atan2(p.uy, p.ux) + (rand() < 0.04 ? 0.18 : 0) });
       }
       for (let s = 5 + rand() * 6; s < total - 5; s += 13 + rand() * 5) {
         const p = sample(road.line, cum, s);
         if (dist(p.x, p.y) > detail.parkedDistance * 1.3 || rand() < 0.4) continue;
         const x = p.x - p.uy * 8.2 * side, y = p.y + p.ux * 8.2 * side;
-        if (!isWater(x, y) && !blocked(x, y, 3)) treePts.push([x, y]);
+        if (!isWater(x, y) && !blocked(x, y, 3) && !nearOtherStreet(x, y, roadId, 7)) treePts.push([x, y]);
       }
     }
   }

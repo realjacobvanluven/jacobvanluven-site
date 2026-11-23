@@ -157,6 +157,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   labelling land components) with tapered ends; dead-end paths fade out instead of stopping square; bike paths get painted edge lines
   and wider bends; streets get a kerb and sidewalk layer (`sidewalk` in `streets.js`); street ways that meet at a plain corner are
   chained (`chainRoads` in `skyline-data.js`) so a 90° corner becomes one rounded curve; the promenade has paving texture and a kerb stone.
+  Eighth pass (2026-11-22): no traffic or parked cars on closed street loops or stubs under 70 m, and parked cars stay out of
+  junctions and the street ends (`nearOtherStreet` in `southbank.js`); open-water boats within 45 m of a bridge axis are dropped;
+  car bodies are rounded boxes with a tapered cabin; square-cell noise (the blocky mosaic in paving, rock, asphalt and sidewalks) is
+  replaced by smooth noise and cellular stones (`gfbm`, `worley` in `shaders.js`); Granville Island sheds get roof overhangs and
+  rooftop vents.
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

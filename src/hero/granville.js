@@ -76,17 +76,28 @@ function rect(c, angle, a, w) {
   return [[c[0] - ux * a - vx * w, c[1] - uy * a - vy * w], [c[0] + ux * a - vx * w, c[1] + uy * a - vy * w], [c[0] + ux * a + vx * w, c[1] + uy * a + vy * w], [c[0] - ux * a + vx * w, c[1] - uy * a + vy * w]];
 }
 
-/** Gable roof over an oriented rectangle (ridge along the long axis). */
+/** Gable roof over an oriented rectangle (ridge along the long axis), overhanging the walls a little like real eaves. */
 function gable(b, c, angle, a, w, eave, rise, albedo, seed) {
   const ux = Math.cos(angle), uy = Math.sin(angle);
   const [p0, p1, p2, p3] = rect(c, angle, a, w);
   const r0 = [c[0] - ux * a, c[1] - uy * a], r1 = [c[0] + ux * a, c[1] + uy * a];
   const W = (p, y) => [p[0], y, -p[1]];
-  b.quad(W(p0, eave), W(p1, eave), W(r1, eave + rise), W(r0, eave + rise), albedo, 1, [1, 0], seed);
-  b.quad(W(p3, eave), W(r0, eave + rise), W(r1, eave + rise), W(p2, eave), albedo, 1, [1, 0], seed);
+  // Roof planes: wider than the walls (side eaves 0.6 m, ends 0.4 m), sloping with the same pitch, so the eaves drop a little.
+  const over = 0.6, drop = (rise / Math.max(w, 1)) * over;
+  const [q0, q1, q2, q3] = rect(c, angle, a + 0.4, w + over);
+  const s0 = [c[0] - ux * (a + 0.4), c[1] - uy * (a + 0.4)], s1 = [c[0] + ux * (a + 0.4), c[1] + uy * (a + 0.4)];
+  b.quad(W(q0, eave - drop), W(q1, eave - drop), W(s1, eave + rise), W(s0, eave + rise), albedo, 1, [1, 0], seed);
+  b.quad(W(q3, eave - drop), W(s0, eave + rise), W(s1, eave + rise), W(q2, eave - drop), albedo, 1, [1, 0], seed);
   const gab = (p, q, apex) => b.tri(W(p, eave), W(q, eave), W(apex, eave + rise), albedo, 0, [1, 0], seed); // gable ends (wall paint)
   gab(p0, p3, r0);
   gab(p1, p2, r1);
+}
+
+/** A small axis-aligned box (a vent, a chimney, a plant housing) standing on a roof. */
+function roofBox(b, x, y, w, d, y0, y1, albedo, seed) {
+  const pts = [[x - w / 2, y - d / 2], [x + w / 2, y - d / 2], [x + w / 2, y + d / 2], [x - w / 2, y + d / 2]];
+  walls(b, pts, y0, y1, albedo, seed, 1);
+  cap(b, pts, y1, [0.1, 0.1, 0.11], seed);
 }
 
 function createShedMaterial(uniforms) {
@@ -251,6 +262,17 @@ export function createGranville(gi, uniforms, { lightShare = 1 } = {}) {
     } else {
       walls(b, ring, 0, eave, albedo, seed);
       cap(b, ring, eave, ROOF, seed);
+    }
+    // Rooftop vents and chimneys on the bigger sheds (kept off the edges): small dark boxes, a few per roof.
+    if (area > 160 && isRect) {
+      const ux = Math.cos(e.angle), uy = Math.sin(e.angle);
+      const vents = Math.min(4, 1 + Math.floor(area / 500));
+      for (let k = 0; k < vents; k++) {
+        const t = (rand() - 0.5) * 1.5 * e.a, sd = (rand() - 0.5) * 0.9 * e.b;
+        const x = e.center[0] + ux * t - uy * sd, y = e.center[1] + uy * t + ux * sd;
+        const top = eave + (area > 900 ? 2.6 : Math.min(e.b * 0.5, 3.4)) * (1 - Math.abs(sd) / e.b) * 0.9;
+        roofBox(b, x, y, 0.7 + rand() * 0.8, 0.7 + rand() * 0.8, top - 0.3, top + 0.9 + rand() * 1.4, [0.2, 0.2, 0.22], seed);
+      }
     }
     // Warm lights along the long walls (string lights, lanterns, shopfronts): the lit-up island look.
     if (area > 80) {

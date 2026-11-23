@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { skyGlsl, hashGlsl, groundGlsl, fogGlsl } from './shaders.js';
 import { miterOffsets, isIsland } from './ribbon.js';
 
 /**
@@ -109,6 +109,7 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       uniform float uSpacing; uniform float uInset;
       varying vec3 vWorld; varying vec3 vNormal; varying float vArc; varying float vAcross;
@@ -119,8 +120,12 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
         float across = mix(vAcross - uInset, 3.0, isWall);
         float pool = exp(-(along * along + across * across) / (2.0 * 4.5 * 4.5));
         // Promenade paving: slabs with joints and grain, and a lighter kerb stone along the inland edge.
-        float grain = 0.8 + 0.4 * hash12(floor(vWorld.xz * 2.2));
-        float joint = 1.0 - 0.2 * (1.0 - step(0.06, fract(vArc / 2.0))) * step(0.0, vAcross);
+        // Slabs: broad smooth tone drift plus a slight per-slab shift, and thin dark joints (no square noise cells).
+        vec2 slab = vec2(vArc / 2.2, vAcross / 1.1);
+        float slabTone = 0.94 + 0.12 * hash12(floor(slab));
+        float grain = (0.82 + 0.36 * gfbm(vWorld.xz * 1.4)) * slabTone;
+        vec2 sf = fract(slab);
+        float joint = 1.0 - 0.28 * (1.0 - smoothstep(0.0, 0.035, min(sf.x, sf.y))) * step(0.0, vAcross);
         float kerbStone = smoothstep(4.5, 4.58, vAcross) * (1.0 - smoothstep(4.98, 5.05, vAcross)); // the deck edge is 5 m inland
         vec3 paving = mix(vec3(0.05, 0.05, 0.055) * joint, vec3(0.085, 0.083, 0.08), kerbStone) * grain;
         vec3 concrete = vec3(0.13, 0.13, 0.135);

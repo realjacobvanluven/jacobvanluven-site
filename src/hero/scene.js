@@ -375,6 +375,13 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
       openBoats.push({ x, y, heading: br() * Math.PI * 2, length: sail ? 8 + br() * 6 : 7 + br() * 8, sail });
     }
   }
+  // Anchored boats never sit by a bridge: an open-water boat within 45 m of any bridge's axis is dropped (it would hug a pier or
+  // sit under the deck, and read as a mistake).
+  const bridgeDistance = (x, y) => Math.min(...data.bridges.map(({ line: [a, b] }) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
+  }));
+  for (let i = openBoats.length - 1; i >= 0; i--) if (bridgeDistance(openBoats[i].x, openBoats[i].y) < 45) openBoats.splice(i, 1);
   const boats = createBoats([...data.boats, ...openBoats], data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
   scene.add(boats.group);
   addLights(boats.lights, 2);
@@ -500,7 +507,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, granville: granville.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, openBoats: openBoats.map((b) => [Math.round(b.x), Math.round(b.y), b.sail ? 'sail' : 'motor']), granville: granville.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {

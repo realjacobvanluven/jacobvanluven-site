@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { skyGlsl, hashGlsl, groundGlsl, fogGlsl } from './shaders.js';
 import { isIsland, miterOffsets } from './ribbon.js';
 
 /**
@@ -66,16 +66,23 @@ export function createIslands(shoreline, causeways, uniforms) {
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       varying vec3 vWorld; varying float vKind;
       void main() {
         vec2 p = vWorld.xz;
-        float boulder = hash12(floor(p * 1.1));
-        float grit = hash12(floor(p * 3.4) + 7.0);
-        vec3 rock = mix(vec3(0.03, 0.03, 0.032), vec3(0.085, 0.08, 0.072), boulder) * (0.65 + 0.7 * grit);
-        float clump = hash12(floor(p / 4.5));
-        vec3 plants = mix(vec3(0.010, 0.022, 0.012), vec3(0.020, 0.030, 0.013), clump) * (0.7 + 0.6 * grit);
-        vec3 pavers = vec3(0.07, 0.068, 0.064) * (0.85 + 0.3 * grit);
+        // Rock: rounded boulders with dark gaps between them (cellular), broad lighter and darker drifts across them.
+        float cell = worley(p * 0.85);
+        float stone = 1.0 - smoothstep(0.38, 0.66, cell);
+        float drift = gfbm(p * 0.6);
+        float grit = gfbm(p * 3.1);
+        vec3 rock = mix(vec3(0.026, 0.026, 0.028), vec3(0.10, 0.094, 0.085), drift) * (0.45 + 0.7 * stone) * (0.8 + 0.4 * grit);
+        // Planting: broad clumps of lighter and darker green, fine grain.
+        float clump = gfbm(p / 5.0);
+        vec3 plants = mix(vec3(0.010, 0.022, 0.012), vec3(0.022, 0.032, 0.014), clump) * (0.75 + 0.5 * grit);
+        // Pavers (the causeway path): slabs with joints.
+        vec2 sf = fract(p / 0.9);
+        vec3 pavers = vec3(0.07, 0.068, 0.064) * (0.85 + 0.3 * grit) * (1.0 - 0.25 * (1.0 - smoothstep(0.0, 0.05, min(sf.x, sf.y))));
         vec3 base = vKind < 0.5 ? rock : vKind < 1.5 ? plants : pavers;
         // Cool sky light, and a little warm spill from the seawall lamps nearby.
         vec3 col = base * vec3(0.55, 0.62, 0.85) * 1.2 + base * vec3(1.0, 0.65, 0.35) * 0.35;

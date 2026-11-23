@@ -102,6 +102,23 @@ float gnoise(vec2 p) {
   return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 float gfbm(vec2 p) { return gnoise(p) * 0.55 + gnoise(p * 2.13 + 7.1) * 0.3 + gnoise(p * 4.7 + 13.3) * 0.15; }
+// Cellular (Worley) distance: near 0 at the centre of a cell, up to ~1 at the borders. Used for stones, cobbles and gravel:
+// round shapes with dark gaps, not square blocks.
+vec2 hash22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+float worley(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  float d = 8.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 g = vec2(float(x), float(y));
+    vec2 r = g + hash22(i + g) - f;
+    d = min(d, dot(r, r));
+  }
+  return sqrt(d);
+}
 vec3 groundColor(vec2 p) {
   float broad = gfbm(p / 70.0);
   float mid = gfbm(p / 11.0);

@@ -77,6 +77,7 @@ try {
     writeFileSync(join(outDir, `${name}.png`), Buffer.from(result.png.split(',')[1], 'base64'));
     const t = result.timings ?? {};
     if (result.tiers) console.log('tiers:', JSON.stringify(result.tiers));
+    if (process.env.LOGJSON) console.log('LOG', JSON.stringify(result.log));
     if (process.env.STATS) { const { bridge, boats, ...rest } = result.stats ?? {}; console.log(JSON.stringify(rest)); }
     console.log(`${name}: ok in ${((Date.now() - t0) / 1000).toFixed(1)}s (scene build ${Math.round(t.total ?? 0)} ms)${result.log?.length ? ` | log: ${result.log.slice(0, 3).join(' / ')}` : ''}`);
   }
