@@ -56,11 +56,37 @@ function createGreens(greens, uniforms, heightAt = () => 0) {
 }
 
 /** Footpaths (light pavers) and bike paths (asphalt, dashed centre line), with path lights. */
-function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, heightAt = () => 0, shoreDistance = () => Infinity }) {
-  const pos = [], arc = [], across = [], half = [], cyc = [];
+function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, heightAt = () => 0, shoreDistance = () => Infinity, roads = [] }) {
+  const pos = [], arc = [], across = [], half = [], cyc = [], free = [];
   const lamps = [];
-  for (const p of paths) {
+  // A path end that joins nothing (no other path or street within a few metres, not on the seawall) is a dead end in the map
+  // data: instead of stopping square, the ribbon fades out over its last few metres, like a worn path in the grass.
+  const CELL = 10, grid = new Map();
+  const key = (i, j) => `${i},${j}`;
+  const addSegment = (id, a, b, reach) => {
+    for (let i = Math.floor((Math.min(a[0], b[0]) - reach) / CELL); i <= Math.floor((Math.max(a[0], b[0]) + reach) / CELL); i++)
+      for (let j = Math.floor((Math.min(a[1], b[1]) - reach) / CELL); j <= Math.floor((Math.max(a[1], b[1]) + reach) / CELL); j++)
+        (grid.get(key(i, j)) ?? grid.set(key(i, j), []).get(key(i, j))).push([id, a, b, reach]);
+  };
+  paths.forEach((p, id) => { for (let i = 1; i < p.line.length; i++) addSegment(id, p.line[i - 1], p.line[i], 3.5); });
+  roads.forEach((r) => { for (let i = 1; i < r.line.length; i++) addSegment(-1, r.line[i - 1], r.line[i], r.main ? 12 : 9); });
+  const joined = (pt, id) => {
+    if (shoreDistance(pt[0], pt[1]) < 9) return true;
+    for (const [sid, a, b, reach] of grid.get(key(Math.floor(pt[0] / CELL), Math.floor(pt[1] / CELL))) ?? []) {
+      if (sid === id) continue;
+      const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / l2));
+      if (Math.hypot(pt[0] - a[0] - dx * t, pt[1] - a[1] - dy * t) < reach) return true;
+    }
+    return false;
+  };
+  for (const [pi, p] of paths.entries()) {
     const pts = p.line;
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) { const sg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (sg >= 0.3) total += sg; }
+    const first = pts[0], last = pts[pts.length - 1];
+    const loop = Math.hypot(first[0] - last[0], first[1] - last[1]) < 2;
+    const startFree = !loop && !joined(first, pi), endFree = !loop && !joined(last, pi);
     const w = p.cycle ? 1.8 : 1.4;
     const off = miterOffsets(pts, w);
     let cum = 0;
@@ -86,6 +112,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
           const [x, y, a2, c] = v[kk];
           // On or beside the seawall: ride the deck and its slope, so the path and the deck are one surface.
           pos.push(x, Math.max(0.1 + heightAt(x, y), deckHeight(shoreDistance(x, y)) + 0.03), -y); arc.push(a2); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
+          free.push(Math.min(startFree ? a2 : 1e4, endFree ? total - a2 : 1e4));
         }
       }
       // Path lights (footpaths only), every lampSpacing metres along the arc.
@@ -106,6 +133,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
   geo.setAttribute('aAcross', new THREE.Float32BufferAttribute(across, 1));
   geo.setAttribute('aHalf', new THREE.Float32BufferAttribute(half, 1));
   geo.setAttribute('aCycle', new THREE.Float32BufferAttribute(cyc, 1));
+  geo.setAttribute('aFree', new THREE.Float32BufferAttribute(free, 1));
   const mat = new THREE.ShaderMaterial({
     uniforms: { ...uniforms, uSpacing: { value: lampSpacing } },
     side: THREE.DoubleSide,
@@ -113,11 +141,11 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
     depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     vertexShader: /* glsl */ `
-      attribute float aArc; attribute float aAcross; attribute float aHalf; attribute float aCycle;
-      varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vHalf; varying float vCycle;
+      attribute float aArc; attribute float aAcross; attribute float aHalf; attribute float aCycle; attribute float aFree;
+      varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vHalf; varying float vCycle; varying float vFree;
       void main() {
         vec4 w = modelMatrix * vec4(position, 1.0);
-        vWorld = w.xyz; vArc = aArc; vAcross = aAcross; vHalf = aHalf; vCycle = aCycle;
+        vWorld = w.xyz; vArc = aArc; vAcross = aAcross; vHalf = aHalf; vCycle = aCycle; vFree = aFree;
         gl_Position = projectionMatrix * viewMatrix * w;
       }
     `,
@@ -127,10 +155,10 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
       ${groundGlsl}
       ${fogGlsl}
       uniform float uSpacing;
-      varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vHalf; varying float vCycle;
+      varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vHalf; varying float vCycle; varying float vFree;
       void main() {
         float a = abs(vAcross);
-        float edge = smoothstep(vHalf, vHalf - 0.3, a);
+        float edge = smoothstep(vHalf, vHalf - 0.3, a) * smoothstep(0.0, 6.0, vFree); // fades out at a dead end
         // Pools of light under the path lights (footpaths), a soft general glow along bike paths.
         float along = mod(vArc, uSpacing);
         along = min(along, uSpacing - along); // distance to the nearest path light
@@ -146,7 +174,9 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
         float wear = 1.0 + 0.14 * (1.0 - a / vHalf);
         float dash = vCycle * (1.0 - smoothstep(0.06, 0.14, a)) * step(0.5, fract(vArc / 4.0));
         vec3 base = mix(pavers, asphalt, vCycle) * wear * (1.0 - 0.5 * kerb);
-        vec3 col = base * 0.45 + base * warm * pool * mix(3.2, 1.6, vCycle) + vec3(0.25, 0.22, 0.12) * dash * (0.2 + pool);
+        // Bike paths: a painted solid line just inside each kerb.
+        float edgeLine = vCycle * smoothstep(vHalf - 0.5, vHalf - 0.44, a) * (1.0 - smoothstep(vHalf - 0.34, vHalf - 0.28, a));
+        vec3 col = base * 0.45 + base * warm * pool * mix(3.2, 1.6, vCycle) + vec3(0.25, 0.22, 0.12) * dash * (0.2 + pool) + vec3(0.2, 0.19, 0.15) * edgeLine * (0.3 + pool);
         gl_FragColor = vec4(applyFog(col, vWorld), edge);
       }
     `,
@@ -298,7 +328,7 @@ export function createLampPosts(lamps, { height, near = () => true } = {}) {
 export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater, heightAt = () => 0, shoreDistance } = {}) {
   const group = new THREE.Group();
   group.add(createGreens(data.greens, uniforms, heightAt));
-  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, heightAt, shoreDistance });
+  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, heightAt, shoreDistance, roads: data.roads });
   group.add(paths.mesh);
   group.add(createLampPosts(paths.lamps, { height: 3.5, near: (x, y) => Math.hypot(x - camera[0], y - camera[1]) < 800 }));
   const trees = createTrees(data.trees, uniforms, { max: maxTrees, heightAt });

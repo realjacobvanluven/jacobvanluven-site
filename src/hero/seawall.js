@@ -10,8 +10,10 @@ import { miterOffsets, isIsland } from './ribbon.js';
 const LAMP_SPACING = 28; // m
 const PATH_WIDTH = 5; // m, inland from the edge (wider strips overlap into blobs on tight curves)
 const LAMP_INSET = 3.5; // m from the edge
-const TOP = 1.6; // m above water
-const EMBANKMENT = 5; // m, the slope from the deck edge down to the ground
+/** The promenade sits only just above the park and the lawns behind it (the real seawall and Hinge Park are about level), so
+ *  paths run onto it without a ramp or a step. */
+export const TOP = 0.45; // m above the water plane
+const EMBANKMENT = 4; // m, the slope from the deck edge down to the ground
 /** The deck's profile, so other layers (the paths) can ride on it exactly: height above the water at distance d inland of the shoreline. */
 export const deckHeight = (d) => (d <= PATH_WIDTH ? TOP : d >= PATH_WIDTH + EMBANKMENT ? 0 : TOP + (0.05 - TOP) * ((d - PATH_WIDTH) / EMBANKMENT));
 
@@ -75,7 +77,7 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
     walk(line, LAMP_SPACING, LAMP_SPACING / 2, (x, y, ux, uy) => {
       const lx = x - uy * LAMP_INSET, ly = y + ux * LAMP_INSET;
       if (!near(lx, ly, maxDistance) || near(lx, ly, 60)) return;
-      lamps.push({ p: [lx, 5.2, -ly], color: [6.5, 3.9, 1.8], size: 0.8 });
+      lamps.push({ p: [lx, TOP + 3.6, -ly], color: [6.5, 3.9, 1.8], size: 0.8 });
     });
     walk(line, 15, 7, (x, y, ux, uy) => {
       if (rand() > 0.5) return;
@@ -116,7 +118,11 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
         float isWall = step(vAcross, -0.5);
         float across = mix(vAcross - uInset, 3.0, isWall);
         float pool = exp(-(along * along + across * across) / (2.0 * 4.5 * 4.5));
-        vec3 paving = vec3(0.05, 0.05, 0.055);
+        // Promenade paving: slabs with joints and grain, and a lighter kerb stone along the inland edge.
+        float grain = 0.8 + 0.4 * hash12(floor(vWorld.xz * 2.2));
+        float joint = 1.0 - 0.2 * (1.0 - step(0.06, fract(vArc / 2.0))) * step(0.0, vAcross);
+        float kerbStone = smoothstep(4.5, 4.58, vAcross) * (1.0 - smoothstep(4.98, 5.05, vAcross)); // the deck edge is 5 m inland
+        vec3 paving = mix(vec3(0.05, 0.05, 0.055) * joint, vec3(0.085, 0.083, 0.08), kerbStone) * grain;
         vec3 concrete = vec3(0.13, 0.13, 0.135);
         // Wall: lit from above by the lamps, darker toward the waterline.
         float wallGrad = smoothstep(-0.8, 1.6, vWorld.y);

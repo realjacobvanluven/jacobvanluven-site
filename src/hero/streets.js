@@ -209,7 +209,8 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
         float sodium = step(0.7, hash12(vec2(k, vPhase * 13.0)));
         vec3 lamp = mix(vec3(1.0, 0.82, 0.6), vec3(1.0, 0.55, 0.22), sodium);
         // Asphalt, a touch lighter in the middle; faint lane markings on wide roads.
-        float edge = smoothstep(vHalf + 2.0, vHalf - 1.0, abs(vAcross));
+        // The carriageway ends at the kerb (the kerb and sidewalk are their own layer, drawn beneath, so they never cut across a junction).
+        float edge = 1.0 - smoothstep(vHalf - 0.5, vHalf - 0.25, abs(vAcross));
         vec3 asphalt = vec3(0.022, 0.023, 0.027) * (0.85 + 0.3 * hash12(floor(vWorld.xz / 3.0)));
         float marking = step(vHalf, 10.5) < 0.5 ? (1.0 - smoothstep(0.1, 0.25, abs(vAcross))) * step(0.5, fract(vArc / 6.0)) : 0.0;
         vec3 col = asphalt + lamp * pool * 0.28 + vec3(0.6) * marking * pool * 0.15;
@@ -221,8 +222,42 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
   });
   const surface = new THREE.Mesh(g, material);
   surface.renderOrder = 1;
+  // Kerb and sidewalk: the strip beyond the carriageway on both sides, drawn first so crossing streets cover it at junctions.
+  const sidewalkMaterial = new THREE.ShaderMaterial({
+    uniforms: { ...uniforms, uSpacing: { value: lampSpacing } },
+    side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    transparent: true,
+    depthWrite: false,
+    vertexShader: material.vertexShader,
+    fragmentShader: /* glsl */ `
+      ${skyGlsl}
+      ${hashGlsl}
+      ${fogGlsl}
+      uniform float uSpacing;
+      varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vPhase; varying float vHalf;
+      void main() {
+        float a = abs(vAcross);
+        float band = smoothstep(vHalf - 0.5, vHalf - 0.25, a) * (1.0 - smoothstep(vHalf + 1.75, vHalf + 1.95, a));
+        // The same street-light pools as the carriageway.
+        float k = floor((vArc - vPhase) / uSpacing + 0.5);
+        float along = vArc - (vPhase + k * uSpacing);
+        float side = mod(k, 2.0) < 0.5 ? 1.0 : -1.0;
+        float across = vAcross - side * vHalf;
+        float pool = exp(-(along * along * 0.8 + across * across) / (2.0 * 5.5 * 5.5));
+        float grain = 0.8 + 0.4 * hash12(floor(vWorld.xz * 2.5));
+        float joint = 1.0 - 0.2 * (1.0 - step(0.06, fract(vArc / 1.6)));
+        float kerb = smoothstep(vHalf - 0.5, vHalf - 0.45, a) * (1.0 - smoothstep(vHalf - 0.02, vHalf + 0.04, a));
+        vec3 base = mix(vec3(0.058, 0.056, 0.054) * joint, vec3(0.1, 0.098, 0.094), kerb) * grain;
+        vec3 col = base * 0.5 + base * vec3(1.0, 0.78, 0.55) * pool * 3.0;
+        gl_FragColor = vec4(applyFog(col * band, vWorld), band);
+      }
+    `,
+  });
+  const sidewalk = new THREE.Mesh(g, sidewalkMaterial);
+  sidewalk.renderOrder = 0.9;
 
-  return { lamps, carLights, updateTraffic, surface, bulbs, bodies: bodies?.mesh ?? null, stats: { lamps: lamps.length, cars: carLights.length / 2, carBodies: bodyCount, ribbonTriangles: rib.pos.length / 9 } };
+  return { lamps, carLights, updateTraffic, surface, sidewalk, bulbs, bodies: bodies?.mesh ?? null, stats: { lamps: lamps.length, cars: carLights.length / 2, carBodies: bodyCount, ribbonTriangles: rib.pos.length / 9 } };
 }
 
 /**

@@ -41,7 +41,12 @@ export function createIslands(shoreline, causeways, uniforms) {
     // Profile across the mound: [offset, height] from one toe to the other.
     const profile = [[-4, -0.7], [-2.3, CREST + 0.25], [-1, CREST + 0.3], [1, CREST + 0.3], [2.3, CREST + 0.25], [4, -0.7]];
     const rows = profile.map(([o]) => miterOffsets(line, o)); // right offsets: p + offset
-    const at = (i, k) => P(line[i][0] + rows[k][i][0], line[i][1] + rows[k][i][1], profile[k][1]);
+    // The mound settles into the ground over the last 6 m at each end, so it meets the island and the shore without a ledge.
+    const cum = [0];
+    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]));
+    const total = cum[cum.length - 1];
+    const settle = (i) => { const t = Math.min(1, Math.min(cum[i], total - cum[i]) / 6); return t * t * (3 - 2 * t); };
+    const at = (i, k) => P(line[i][0] + rows[k][i][0] * (0.55 + 0.45 * settle(i)), line[i][1] + rows[k][i][1] * (0.55 + 0.45 * settle(i)), profile[k][1] * settle(i) + 0.08 * (1 - settle(i)));
     for (let i = 1; i < line.length; i++) for (let k = 0; k < 5; k++) {
       const kind2 = k === 2 ? 2 : 0;
       tri(at(i - 1, k), at(i, k), at(i, k + 1), kind2); tri(at(i - 1, k), at(i, k + 1), at(i - 1, k + 1), kind2);

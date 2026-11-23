@@ -485,6 +485,8 @@ const mask = buildWaterMask(shoreLines, MASK);
 // the coastline data leaves them as islands. Find each one and the shortest gap to the mainland; the scene bridges it.
 const causeways = [];
 const islandCentres = []; // parallel to causeways
+const islandIds = []; // the component id of each island (parallel to causeways)
+let landLabels = null; // { labelAt(x, y), mainland: Set } for the span search below
 {
   const X0 = -700, X1 = 700, Y0 = -350, Y1 = 450, CELL = 4;
   const W = (X1 - X0) / CELL, H = (Y1 - Y0) / CELL;
@@ -511,7 +513,8 @@ const islandCentres = []; // parallel to causeways
   }
   const toXY = ([i, j]) => [X0 + (i + 0.5) * CELL, Y0 + (j + 0.5) * CELL];
   const mainland = comps.filter((c) => c.edge || c.area > 80000).flatMap((c) => c.cells);
-  for (const c of comps) {
+  landLabels = { labelAt: (x, y) => { const i = Math.floor((x - X0) / CELL), j = Math.floor((y - Y0) / CELL); return i < 0 || j < 0 || i >= W || j >= H ? -1 : comp[j * W + i]; }, mainland: new Set(comps.map((c, ci) => (c.edge || c.area > 80000 ? ci : -1)).filter((ci) => ci >= 0)) };
+  for (const [ci, c] of comps.entries()) {
     if (c.edge || c.area < 800 || c.area > 40000) continue;
     const [cx, cy] = c.cells.reduce((a, p) => [a[0] + toXY(p)[0] / c.cells.length, a[1] + toXY(p)[1] / c.cells.length], [0, 0]);
     if (Math.hypot(cx, cy) > 500) continue;
@@ -524,7 +527,7 @@ const islandCentres = []; // parallel to causeways
         if (!best || d < best.d) best = { a, b, d };
       }
     }
-    if (best && best.d < 80) { causeways.push([...best.a, ...best.b]); islandCentres.push([cx, cy]); }
+    if (best && best.d < 80) { causeways.push([...best.a, ...best.b]); islandCentres.push([cx, cy]); islandIds.push(ci); }
     console.log(`Island near the camera: ${Math.round(c.area)} m² at ${Math.round(cx)},${Math.round(cy)}${best ? `; gap to the mainland ${best.d.toFixed(0)} m` : '; no mainland within 100 m'}`);
   }
 }
@@ -734,10 +737,46 @@ for (const e of groundData.elements) {
     greens.push([kind, ...encodeRing(ring)]);
   }
 }
-// Each causeway is a straight rock-and-paver span across the shortest gap between an island and the shore. (The mapped path
-// that crosses the water there stops short of the shore, so it can't be followed.) Connector paths are added below, so the
-// park paths lead onto it at both ends.
-const causewayLines = causeways.map((c) => [[c[0], c[1]], [c[2], c[3]]]);
+// Each causeway is the mapped footpath that really joins the island to the shore. The coastline data has no causeway, so that
+// footpath lies over what the land/water mask calls water: find the path (mostly over water) with one end on the island, orient
+// it island-first, and extend the far end a few metres until it reaches the mainland. If there is no such path, fall back to a
+// straight span across the shortest gap, with connector paths added below.
+const causewayLines = [];
+const causewayIsFallback = [];
+const nearLand = (p, test) => [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4], [3, 3], [-3, -3], [3, -3], [-3, 3]].some(([dx, dy]) => test(landLabels.labelAt(p[0] + dx, p[1] + dy)));
+causeways.forEach((c, k) => {
+  const isIsl = (l) => l === islandIds[k], isMain = (l) => landLabels.mainland.has(l);
+  let best = null;
+  for (const pl of pathLines) {
+    const samples = [];
+    for (let i = 1; i < pl.line.length; i++) {
+      const a = pl.line[i - 1], b = pl.line[i], len = Math.hypot(b[0] - a[0], b[1] - a[1]), steps = Math.max(1, Math.ceil(len));
+      for (let n = i === 1 ? 0 : 1; n <= steps; n++) samples.push([a[0] + ((b[0] - a[0]) * n) / steps, a[1] + ((b[1] - a[1]) * n) / steps]);
+    }
+    if (samples.length < 8 || samples.length > 90) continue;
+    const wet = samples.filter(([x, y]) => mask.isWater(x, y)).length / samples.length;
+    if (wet < 0.6) continue;
+    const first = samples[0], last = samples[samples.length - 1];
+    const startOnIsland = nearLand(first, isIsl), endOnIsland = nearLand(last, isIsl);
+    if (startOnIsland === endOnIsland) continue; // must touch the island at exactly one end
+    const ordered = startOnIsland ? samples : samples.slice().reverse(); // island end first
+    if (!best || ordered.length < best.ordered.length) best = { ordered };
+  }
+  if (!best) { causewayLines.push([[c[0], c[1]], [c[2], c[3]]]); causewayIsFallback.push(true); console.log(`Causeway ${k}: no mapped footpath over the water; straight span across the shortest gap`); return; }
+  const o = best.ordered, end = o[o.length - 1], prev = o[Math.max(0, o.length - 4)];
+  const dir = [end[0] - prev[0], end[1] - prev[1]], dl = Math.hypot(...dir) || 1;
+  // Continue the far end in the same direction until it is on the mainland (at most 25 m), then a little more.
+  const ext = [];
+  let reached = nearLand(end, isMain) ? 0 : -1;
+  for (let m = 1; m <= 25 && reached < 0; m++) { const p = [end[0] + (dir[0] / dl) * m, end[1] + (dir[1] / dl) * m]; ext.push(p); if (landLabels.mainland.has(landLabels.labelAt(p[0], p[1]))) reached = m; }
+  if (reached >= 0) for (let m = 1; m <= 3; m++) ext.push([end[0] + (dir[0] / dl) * (ext.length + m), end[1] + (dir[1] / dl) * (ext.length + m)]);
+  const inDir = [o[0][0] - o[Math.min(3, o.length - 1)][0], o[0][1] - o[Math.min(3, o.length - 1)][1]], il = Math.hypot(...inDir) || 1;
+  const head = [1, 2, 3].map((m) => [o[0][0] + (inDir[0] / il) * m, o[0][1] + (inDir[1] / il) * m]).reverse(); // a few metres up onto the island
+  const line = [...head, ...o, ...ext].filter((_, i) => i % 2 === 0);
+  causewayLines.push(line);
+  causewayIsFallback.push(false);
+  console.log(`Causeway ${k}: follows the mapped footpath over the water (${o.length} m, +${ext.length} m to reach the mainland${reached < 0 ? ' — mainland NOT reached' : ''})`);
+});
 
 // OpenStreetMap maps many paths twice (parallel ways, overlapping segments), which draws as a jumble. Longest first:
 // drop any segment that runs along (nearly parallel, within DEDUPE_M of) one already kept; keep crossings and branches.
@@ -815,11 +854,11 @@ const keptLines = [];
     lines = next;
   }
   // Connectors: from each causeway end to the nearest path vertex within 35 m (the island's paths, and the park's).
-  for (const cw of causewayLines) for (const E of [cw[0], cw[cw.length - 1]]) {
+  causewayLines.forEach((cw, ci) => { if (causewayIsFallback[ci]) for (const E of [cw[0], cw[cw.length - 1]]) {
     let best = null;
     for (const l of lines) for (const V of l.line) { const d = Math.hypot(V[0] - E[0], V[1] - E[1]); if (d > 2 && d < 35 && (!best || d < best.d)) best = { d, V }; }
     if (best) lines.push({ cycle: false, line: [E, best.V] });
-  }
+  } });
   for (const l of lines) paths.push([l.cycle ? 1 : 0, ...encodeRing(l.line)]);
   console.log(`Paths: removed ${removed} dead-end stubs; ${paths.length} lines remain`);
 }

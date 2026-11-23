@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createTrees } from './waterfront.js';
 import { isIsland } from './ribbon.js';
+import { TOP } from './seawall.js';
 import { createCarBodies } from './streets.js';
 
 /**
@@ -12,7 +13,6 @@ import { createCarBodies } from './streets.js';
  * Local metres: x east, y north. Three.js world: X = x, Y = up, Z = -y.
  */
 
-const TOP = 1.6; // seawall deck height above the water (matches seawall.js)
 
 const rng = (seed) => { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
 

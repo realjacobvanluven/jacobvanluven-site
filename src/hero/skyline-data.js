@@ -6,6 +6,45 @@
 
 import { roundCorners } from './smooth.js';
 
+/**
+ * Joins street ways that meet end to end with nothing else there (a plain corner or a street changing names): the map splits a
+ * street at every such point, which leaves a hard corner that rounding can't see. After chaining, a 90° corner is one curve.
+ * Only the same class (main/local) is joined, and only where exactly two ways end at the point.
+ */
+function chainRoads(roads) {
+  const key = (p) => `${Math.round(p[0] * 2)},${Math.round(p[1] * 2)}`;
+  const list = roads.map((r) => ({ ...r, line: r.line.slice() }));
+  for (let pass = 0; pass < 6; pass++) {
+    const ends = new Map();
+    list.forEach((r, i) => {
+      if (!r) return;
+      for (const which of [0, 1]) {
+        const k = key(which ? r.line[r.line.length - 1] : r.line[0]);
+        (ends.get(k) ?? ends.set(k, []).get(k)).push([i, which]);
+      }
+    });
+    // Any other way passing through the point (not ending there) would make it a T: count vertices too.
+    const through = new Map();
+    list.forEach((r, i) => { if (r) for (let v = 1; v < r.line.length - 1; v++) { const k = key(r.line[v]); through.set(k, (through.get(k) ?? 0) + 1); } });
+    let merged = false;
+    for (const [k, at] of ends) {
+      if (at.length !== 2 || through.get(k)) continue;
+      const [[ia, wa], [ib, wb]] = at;
+      if (ia === ib || !list[ia] || !list[ib] || list[ia].main !== list[ib].main) continue;
+      const a = wa ? list[ia].line : list[ia].line.slice().reverse(); // ends at the point
+      const b = wb ? list[ib].line.slice().reverse() : list[ib].line; // starts at the point
+      list[ia] = { main: list[ia].main, line: [...a, ...b.slice(1)] };
+      list[ib] = null;
+      merged = true;
+      break; // the maps are stale: rebuild
+    }
+    if (!merged) break;
+    pass = -1; // keep going until nothing merges
+    if (list.filter(Boolean).length < 2) break;
+  }
+  return list.filter(Boolean);
+}
+
 const decodeRing = (flat, from = 0) => {
   const pts = [];
   let x = 0, y = 0;
@@ -112,8 +151,9 @@ export async function loadSkyline(url) {
     },
     signatures: (raw.signatures ?? []).map((sg) => ({ id: sg.id, height: sg.height, ring: decodeRing(sg.ring) })),
     viaducts: (raw.viaducts ?? []).map((l) => decodeRing(l)),
-    roads: (raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: roundCorners(decodeRing(line), { radius: 7 }) })),
-    paths: (raw.paths ?? []).map(([cls, ...line]) => { const r = decodeRing(line); const closed = r.length > 3 && Math.hypot(r[0][0] - r[r.length - 1][0], r[0][1] - r[r.length - 1][1]) < 1.5; return { cycle: cls === 1, line: roundCorners(r, { radius: 4, closed, samples: 4 }) }; }),
+    roads: chainRoads((raw.roads ?? []).map(([cls, ...line]) => ({ main: cls === 0, line: decodeRing(line) })))
+      .map((r) => ({ ...r, line: roundCorners(r.line, { radius: r.main ? 14 : 12, samples: 8 }) })),
+    paths: (raw.paths ?? []).map(([cls, ...line]) => { const r = decodeRing(line); const closed = r.length > 3 && Math.hypot(r[0][0] - r[r.length - 1][0], r[0][1] - r[r.length - 1][1]) < 1.5; return { cycle: cls === 1, line: roundCorners(r, { radius: cls === 1 ? 9 : 4, closed, samples: cls === 1 ? 6 : 4 }) }; }),
     greens: (raw.greens ?? []).map(([kind, ...ring]) => ({ kind, ring: decodeRing(ring) })),
     trees: raw.trees ? decodeRing(raw.trees) : [],
     raw,
