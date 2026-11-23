@@ -535,8 +535,38 @@ const elevAt = ([x, y]) => {
   const i = Math.max(0, Math.min(elev.cols - 2, Math.floor(fx))), j = Math.max(0, Math.min(elev.rows - 2, Math.floor(fy)));
   const ax = Math.max(0, Math.min(1, fx - i)), ay = Math.max(0, Math.min(1, fy - j));
   const e = (a, b) => Math.max(0, elev.heights[b * elev.cols + a]);
-  return (e(i, j) * (1 - ax) + e(i + 1, j) * ax) * (1 - ay) + (e(i, j + 1) * (1 - ax) + e(i + 1, j + 1) * ax) * ay;
+  const raw = (e(i, j) * (1 - ax) + e(i + 1, j) * ax) * (1 - ay) + (e(i, j + 1) * (1 - ax) + e(i + 1, j + 1) * ax) * ay;
+  return groundRise(x, y, raw);
 };
+/** Height above the flat shore: the first 3 m above sea level count as flat (the seawall level), and the rise fades out
+ *  toward the far west and south edges of the data so the terrain never ends in a cliff. */
+function groundRise(x, y, elevation) {
+  const fade = (t) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k); };
+  return Math.max(0, elevation - 3) * fade((x - SOUTH_ELEVATION.x0) / 160) * fade((y - SOUTH_ELEVATION.y0) / 160);
+}
+
+// The south bank's terrain surface for the scene (metres, decimetre ints): the elevation grid where the land belongs to the
+// south bank (feathered by a 3×3 average so it blends to flat at its edges), flat over water and Granville Island.
+const terrainWeight = (i, j) => {
+  const x = SOUTH_ELEVATION.x0 + i * SOUTH_ELEVATION.step, y = SOUTH_ELEVATION.y0 + j * SOUTH_ELEVATION.step;
+  return southBank([x, y]) && !inGranville([x, y]) && !mask.isWater(x, y) ? 1 : 0;
+};
+const southTerrainRows = [];
+let southTerrainMax = 0;
+for (let j = 0; j < elev.rows; j++) {
+  const row = [];
+  let prev = 0;
+  for (let i = 0; i < elev.cols; i++) {
+    let w = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) w += terrainWeight(Math.max(0, Math.min(elev.cols - 1, i + di)), Math.max(0, Math.min(elev.rows - 1, j + dj)));
+    const h = Math.round(groundRise(SOUTH_ELEVATION.x0 + i * SOUTH_ELEVATION.step, SOUTH_ELEVATION.y0 + j * SOUTH_ELEVATION.step, Math.max(0, elev.heights[j * elev.cols + i])) * (w / 9) * 10);
+    southTerrainMax = Math.max(southTerrainMax, h / 10);
+    row.push(h - prev);
+    prev = h;
+  }
+  southTerrainRows.push(row);
+}
+console.log(`South-bank terrain: ${elev.cols}×${elev.rows} grid, up to ${southTerrainMax.toFixed(0)} m`);
 
 // Crop to the view wedge + the south bank. South-bank buildings stand on rising ground: their height includes it.
 const southBankBuildings = new Set();
@@ -845,6 +875,8 @@ const data = {
   // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
   boats,
   signatures,
+  // Ground height under the south bank: decimetres, rows south → north, each row delta-encoded west → east
+  southTerrain: { x0: SOUTH_ELEVATION.x0, y0: SOUTH_ELEVATION.y0, step: SOUTH_ELEVATION.step, cols: elev.cols, rows: elev.rows, heights: southTerrainRows },
   // Rock causeways [axDm, ayDm, bxDm, byDm] joining small islands to the shore (Habitat Island)
   causeways: causeways.map((c) => c.map(dm)),
   // Granville Island (hand-built in src/hero/granville.js): its buildings [heightDm, baseDm, ...ring] and the Ocean

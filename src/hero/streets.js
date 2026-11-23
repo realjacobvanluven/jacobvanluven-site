@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
 import { miterOffsets } from './ribbon.js';
 
-export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 2600, lampSpacing = 34, carSpacing = [18, 48], ribbonDistance = 2200, localTrafficDistance = 1300, bodyDistance = 1500, isWater = () => false } = {}) {
+export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 2600, lampSpacing = 34, carSpacing = [18, 48], ribbonDistance = 2200, localTrafficDistance = 1300, bodyDistance = 1500, isWater = () => false, heightAt = () => 0 } = {}) {
   let seed = 77;
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   const far = ([x, y]) => Math.hypot(x - camera[0], y - camera[1]) > maxDistance;
@@ -51,7 +51,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
         const v = [[ax - oa[0], ay - oa[1], cum[i - 1], -w], [bx - ob[0], by - ob[1], cum[i], -w], [bx + ob[0], by + ob[1], cum[i], w], [ax + oa[0], ay + oa[1], cum[i - 1], w]];
         for (const k of [0, 1, 2, 0, 2, 3]) {
           const [x, y, a, c] = v[k];
-          rib.pos.push(x, 0.12, -y); rib.arc.push(a); rib.across.push(c); rib.phase.push(phase); rib.half.push(half);
+          rib.pos.push(x, 0.12 + heightAt(x, y), -y); rib.arc.push(a); rib.across.push(c); rib.phase.push(phase); rib.half.push(half);
         }
       }
     }
@@ -61,7 +61,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
       if (far(p) || Math.hypot(p[0] - camera[0], p[1] - camera[1]) < 150) continue;
       const sodium = rand() < 0.3;
       const k = 3.4 + rand() * 1.4;
-      lamps.push({ p: [p[0], 8, -p[1]], color: (sodium ? [1, 0.55, 0.2] : [1, 0.86, 0.68]).map((c) => c * k), size: 0.7 });
+      lamps.push({ p: [p[0], 8 + heightAt(p[0], p[1]), -p[1]], color: (sodium ? [1, 0.55, 0.2] : [1, 0.86, 0.68]).map((c) => c * k), size: 0.7 });
     }
 
     // Traffic: one lane each way on main roads; lighter traffic on local streets near the camera
@@ -111,7 +111,7 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
     for (const [dx, dy, axis] of [[7, 7, 0], [-7, -7, 0], [7, -7, 1], [-7, 7, 1]]) {
       const go = (axis === 0) === ns;
       const color = go ? (amber ? [4.5, 2.2, 0.2] : [0.25, 4.2, 1.6]) : [4.6, 0.25, 0.12];
-      lamps.push({ p: [e.p[0] + dx, 5.5, -(e.p[1] + dy)], color, size: 0.45 });
+      lamps.push({ p: [e.p[0] + dx, 5.5 + heightAt(e.p[0], e.p[1]), -(e.p[1] + dy)], color, size: 0.45 });
     }
   }
 
@@ -136,11 +136,11 @@ export function createStreets(roads, uniforms, { camera = [0, 0], maxDistance = 
         // Lights at the front (or back) corners of the car.
         const ex = cx + dx * lane.lightEnd, ey = cy + dy * lane.lightEnd;
         for (const k of [-0.75, 0.75]) {
-          positions[i++] = ex - dy * k; positions[i++] = 0.7; positions[i++] = -(ey + dx * k);
+          positions[i++] = ex - dy * k; positions[i++] = 0.7 + heightAt(cx, cy); positions[i++] = -(ey + dx * k);
         }
         if (lane.bodies) {
           q.setFromAxisAngle(up, Math.atan2(dy, dx));
-          m.compose(v.set(cx, 0, -cy), q, one);
+          m.compose(v.set(cx, heightAt(cx, cy), -cy), q, one);
           bodies.mesh.setMatrixAt(b++, m);
         }
       }

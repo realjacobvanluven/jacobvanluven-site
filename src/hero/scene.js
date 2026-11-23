@@ -6,6 +6,7 @@ import { createSignatures } from './signatures.js';
 import { createGranville } from './granville.js';
 import { createSouthBank } from './southbank.js';
 import { createIslands } from './islands.js';
+import { decodeTerrain, createTerrain } from './terrain.js';
 import { createStreets } from './streets.js';
 import { createWaterfront } from './waterfront.js';
 import { createWater, createGround } from './water.js';
@@ -261,6 +262,11 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const water = createWater(uniforms, data.waterMask, { reflectionScale: q.reflectionScale, width, height, pixelRatio: renderer.getPixelRatio() });
   scene.add(water);
   scene.add(createGround(uniforms));
+  // The south bank rises toward Broadway: a real terrain surface; everything on the land follows it via heightAt.
+  const southTerrain = decodeTerrain(data.southTerrain);
+  const groundAt = southTerrain.heightAt;
+  const terrainMesh = createTerrain(southTerrain, uniforms);
+  if (terrainMesh) scene.add(terrainMesh);
 
   await breathe();
   // Mapped trees replace the seawall's generated ones when the data has them.
@@ -271,7 +277,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.add(islands.group);
 
   // Waterfront and parks: lawns, footpaths and bike paths with path lights, mapped trees.
-  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater });
+  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater, heightAt: groundAt });
   scene.add(waterfront.group);
   addLights(waterfront.lamps, 2);
 
@@ -280,7 +286,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   if (bcUpdate) animators.push(bcUpdate);
 
   // Street life: lamps along the downtown streets, traffic on the main roads.
-  const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing, isWater });
+  const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing, isWater, heightAt: groundAt });
   scene.add(streets.surface);
   if (streets.bodies) scene.add(streets.bodies);
   addLights(streets.lamps, 2);
@@ -291,7 +297,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     animators.push((time) => { streets.updateTraffic(sp.array, time); sp.needsUpdate = true; });
   }
   // South-bank street life: seawall railings and benches, parked cars, street trees, walkers and cyclists.
-  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList, detail: detail.southBank });
+  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList, detail: detail.southBank, heightAt: groundAt });
   scene.add(southBank.group);
   animators.push(southBank.update);
   if (southBank.cyclistLights.length) {

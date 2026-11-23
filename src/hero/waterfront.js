@@ -10,13 +10,13 @@ import { miterOffsets } from './ribbon.js';
 const PATH_LAMP_SPACING = 24;
 
 /** Lawns (0), sports fields (1) and playgrounds (2) as flat polygons just above the ground. */
-function createGreens(greens, uniforms) {
+function createGreens(greens, uniforms, heightAt = () => 0) {
   const pos = [], kind = [];
   for (const g of greens) {
     const contour = g.ring.map(([x, y]) => new THREE.Vector2(x, y));
     let tris;
     try { tris = THREE.ShapeUtils.triangulateShape(contour, []); } catch { continue; }
-    for (const t of tris) for (const i of t) { pos.push(g.ring[i][0], 0.06, -g.ring[i][1]); kind.push(g.kind); }
+    for (const t of tris) for (const i of t) { pos.push(g.ring[i][0], 0.06 + heightAt(g.ring[i][0], g.ring[i][1]), -g.ring[i][1]); kind.push(g.kind); }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -51,7 +51,7 @@ function createGreens(greens, uniforms) {
 }
 
 /** Footpaths (light pavers) and bike paths (asphalt, dashed centre line), with path lights. */
-function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false }) {
+function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, heightAt = () => 0 }) {
   const pos = [], arc = [], across = [], half = [], cyc = [];
   const lamps = [];
   for (const p of paths) {
@@ -71,7 +71,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
       const v = [[ax - oa[0], ay - oa[1], cum, -w], [bx - ob[0], by - ob[1], cum + seg, -w], [bx + ob[0], by + ob[1], cum + seg, w], [ax + oa[0], ay + oa[1], cum, w]];
       for (const k of [0, 1, 2, 0, 2, 3]) {
         const [x, y, a, c] = v[k];
-        pos.push(x, 0.1, -y); arc.push(a); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
+        pos.push(x, 0.1 + heightAt(x, y), -y); arc.push(a); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
       }
       // Path lights (footpaths only), every lampSpacing metres along the arc.
       if (!p.cycle) {
@@ -79,7 +79,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
         for (let s = first; s < cum + seg; s += lampSpacing) {
           const t = (s - cum) / seg, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
           const d = Math.hypot(x - camera[0], y - camera[1]);
-          if (d < lampDistance && d > 120) lamps.push({ p: [x + nx * 2, 3.5, -(y + ny * 2)], color: [3.2, 2.2, 1.2], size: 0.45 });
+          if (d < lampDistance && d > 120) lamps.push({ p: [x + nx * 2, 3.5 + heightAt(x, y), -(y + ny * 2)], color: [3.2, 2.2, 1.2], size: 0.45 });
         }
       }
       cum += seg;
@@ -134,29 +134,44 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
 }
 
 /**
- * Trees: each crown is a camera-facing disc shaded as a sphere (smooth, no facets), with a ragged leafy edge and clumped
- * shading, so it reads as foliage rather than a faceted lump, at a fraction of the triangles of a mesh crown. A dark
- * trunk below. Lit warm from below near the paths.
+ * Trees (added 2026-11-22, second pass): five kinds with their own silhouettes and size ranges: round broadleaf, layered
+ * conifer, tall columnar, broad spreading and small ornamental, each tinted per tree (greens from yellow to blue, a share of
+ * autumn gold and copper). A crown is a camera-facing card shaded as a rounded form with a ragged, leafy edge: smooth, no
+ * facets, and a fraction of the triangles of a mesh. A dark trunk below; lit warm from below near the paths.
  */
-export function createTrees(trees, uniforms, { max }) {
+const SPECIES = [
+  // weight, height [min, span], crown radius [min, span], crown centre as a share of the height, half-height as a share, trunk share
+  { weight: 0.36, h: [7, 8], r: [2.4, 2.4], centre: 0.62, half: 0.4, trunk: 0.42 }, // 0 round broadleaf
+  { weight: 0.2, h: [10, 10], r: [1.8, 1.5], centre: 0.56, half: 0.44, trunk: 0.14 }, // 1 layered conifer
+  { weight: 0.1, h: [9, 8], r: [1.1, 0.8], centre: 0.6, half: 0.42, trunk: 0.3 }, // 2 tall columnar
+  { weight: 0.18, h: [6, 5], r: [4, 2.8], centre: 0.6, half: 0.28, trunk: 0.38 }, // 3 broad spreading
+  { weight: 0.16, h: [3, 2.8], r: [1.4, 1.2], centre: 0.58, half: 0.4, trunk: 0.35 }, // 4 small ornamental
+];
+
+export function createTrees(trees, uniforms, { max, heightAt = () => 0 }) {
   const list = trees.slice(0, max);
+  const n = list.length;
+  const speciesAttr = new Float32Array(n), tintAttr = new Float32Array(n * 3);
   const mat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: /* glsl */ `
-      varying vec3 vWorld; varying vec2 vUv; varying float vSeed; varying float vRel;
+      attribute float aSpecies; attribute vec3 aTint;
+      varying vec3 vWorld; varying vec2 vUv; varying float vSeed; varying float vSpecies; varying vec3 vTint;
       varying vec3 vRight; varying vec3 vUp; varying vec3 vBack;
       void main() {
         mat4 m = modelMatrix * instanceMatrix;
         vec3 c = m[3].xyz;
-        float R = 0.5 * (length(m[0].xyz) + length(m[1].xyz));
+        float rx = length(m[0].xyz), ry = length(m[1].xyz);
         vRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
         vUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
         vBack = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
         vUv = position.xy;
         vSeed = fract(sin(dot(c.xz, vec2(12.9898, 78.233))) * 43758.5453);
-        vec3 w = c + (vRight * position.x + vUp * position.y) * R;
+        vSpecies = aSpecies; vTint = aTint;
+        // A crown stays upright (up = world up) so tall trees don't lean as the camera tilts down toward them.
+        vec3 up = normalize(mix(vec3(0.0, 1.0, 0.0), vUp, 0.35));
+        vec3 w = c + vRight * position.x * rx + up * position.y * ry;
         vWorld = w;
-        vRel = 0.0;
         gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
       }
     `,
@@ -164,7 +179,7 @@ export function createTrees(trees, uniforms, { max }) {
       ${skyGlsl}
       ${hashGlsl}
       ${fogGlsl}
-      varying vec3 vWorld; varying vec2 vUv; varying float vSeed; varying float vRel;
+      varying vec3 vWorld; varying vec2 vUv; varying float vSeed; varying float vSpecies; varying vec3 vTint;
       varying vec3 vRight; varying vec3 vUp; varying vec3 vBack;
       float vnoise(vec2 p) {
         vec2 i = floor(p), f = fract(p);
@@ -172,50 +187,84 @@ export function createTrees(trees, uniforms, { max }) {
         return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
       }
       void main() {
-        float r2 = dot(vUv, vUv);
-        float ang = atan(vUv.y, vUv.x);
-        // Ragged edge: lumps of foliage around the rim.
-        float edge = 0.84 + 0.1 * hash12(vec2(floor(ang * 6.0), vSeed * 40.0)) + 0.06 * sin(ang * 11.0 + vSeed * 30.0);
-        if (r2 > edge * edge) discard;
-        vec3 nv = vec3(vUv, sqrt(max(1.0 - r2 / (edge * edge), 0.0)));
-        vec3 n = normalize(vRight * nv.x + vUp * nv.y + vBack * nv.z);
-        // Leaf clumps: shading varies in patches across the crown.
-        float clump = 0.65 + 0.7 * vnoise(vUv * 3.2 + vSeed * 17.0);
-        float fine = 0.88 + 0.24 * vnoise(vUv * 9.0 + vSeed * 5.0);
-        vec3 leaf = mix(vec3(0.014, 0.026, 0.015), vec3(0.026, 0.034, 0.014), vSeed) * clump * fine;
+        vec2 u = vUv;
+        if (vSeed > 0.5) u.x = -u.x; // mirror half of them: the ragged edges differ
+        float sp = vSpecies;
+        bool conifer = sp > 0.5 && sp < 1.5;
+        float ang = atan(u.y, u.x);
+        vec3 n;
+        float shade = 1.0;
+        if (conifer) {
+          // Layered tiers: a tapering cone with a serrated edge, each tier a little narrower than the one below.
+          float t = (1.0 - u.y) * 0.5; // 0 at the tip, 1 at the base
+          float tier = fract(t * 6.0 + vSeed * 3.0);
+          float width = (0.05 + 0.95 * t) * (0.72 + 0.28 * tier) * (0.94 + 0.12 * hash12(vec2(floor(t * 6.0), vSeed * 20.0)));
+          if (abs(u.x) > width) discard;
+          float nx = u.x / max(width, 0.05);
+          n = normalize(vRight * nx + vBack * sqrt(max(1.0 - nx * nx, 0.0)) + vec3(0.0, 0.7, 0.0));
+          shade = 0.55 + 0.45 * (0.4 + 0.6 * tier) * (0.7 + 0.3 * t);
+        } else {
+          float r2 = dot(u, u);
+          float edge = 0.84 + 0.1 * hash12(vec2(floor(ang * 6.0), vSeed * 40.0)) + 0.06 * sin(ang * 11.0 + vSeed * 30.0);
+          if (r2 > edge * edge) discard;
+          vec3 nv = vec3(u, sqrt(max(1.0 - r2 / (edge * edge), 0.0)));
+          n = normalize(vRight * nv.x + vUp * nv.y + vBack * nv.z);
+        }
+        float clump = 0.65 + 0.7 * vnoise(u * (conifer ? vec2(4.0, 9.0) : vec2(3.2)) + vSeed * 17.0);
+        float fine = 0.88 + 0.24 * vnoise(u * 9.0 + vSeed * 5.0);
+        vec3 leaf = conifer ? mix(vec3(0.006, 0.018, 0.016), vec3(0.010, 0.024, 0.017), vSeed) : mix(vec3(0.014, 0.026, 0.015), vec3(0.026, 0.034, 0.014), vSeed);
+        leaf *= vTint * clump * fine * shade;
         float sky = 0.3 + 0.7 * max(n.y, 0.0);
         vec3 col = leaf * sky * vec3(0.8, 0.95, 1.2) * 1.6;
         // Warm light from the lamps below, on the underside.
-        col += vec3(1.0, 0.62, 0.3) * 0.055 * smoothstep(0.2, -0.9, n.y) * (0.5 + vSeed);
+        col += vec3(1.0, 0.62, 0.3) * 0.055 * smoothstep(0.2, -0.9, n.y) * (0.5 + vSeed) * shade;
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
     `,
   });
-  const crowns = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2), mat, list.length);
+  const geo = new THREE.PlaneGeometry(2, 2);
+  geo.setAttribute('aSpecies', new THREE.InstancedBufferAttribute(speciesAttr, 1));
+  geo.setAttribute('aTint', new THREE.InstancedBufferAttribute(tintAttr, 3));
+  const crowns = new THREE.InstancedMesh(geo, mat, n);
   crowns.frustumCulled = false; // billboards: the bounding sphere of one quad is wrong for the whole set
-  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.28, 1, 5), new THREE.MeshLambertMaterial({ color: 0x120f0d }), list.length);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.3, 1, 5), new THREE.MeshLambertMaterial({ color: 0x120f0d }), n);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
   let seed = 5;
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   list.forEach(([x, y], i) => {
-    const h = 6 + rand() * 9, r = 2 + rand() * 2.6;
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * 6.28);
-    m.compose(new THREE.Vector3(x, h * 0.62, -y), q, new THREE.Vector3(r * 1.1, h * 0.38 * 1.15, r * 1.1));
+    // Pick a kind by weight.
+    let pick = rand() * SPECIES.reduce((t, k) => t + k.weight, 0), id = 0;
+    for (; id < SPECIES.length - 1; id++) { pick -= SPECIES[id].weight; if (pick <= 0) break; }
+    const k = SPECIES[id];
+    const bias = rand() * rand(); // most trees middling, a few tall giants
+    const h = k.h[0] + k.h[1] * (0.25 + 0.75 * bias + 0.2 * rand()) , r = k.r[0] + k.r[1] * rand();
+    speciesAttr[i] = id;
+    // Tint: greens from yellow to blue; some autumn gold and copper (broadleaf kinds only).
+    let t = [0.85 + rand() * 0.45, 0.85 + rand() * 0.4, 0.8 + rand() * 0.5];
+    const dice = rand();
+    if (id !== 1 && dice < 0.1) t = [2.1, 1.35, 0.3]; // gold
+    else if (id !== 1 && id !== 2 && dice < 0.15) t = [1.9, 0.55, 0.4]; // copper
+    else if (id === 1) t = [0.8 + rand() * 0.3, 0.9 + rand() * 0.3, 1.0 + rand() * 0.45]; // cooler blue-greens
+    tintAttr.set(t, i * 3);
+    const g = heightAt(x, y);
+    q.setFromAxisAngle(up, rand() * 6.28);
+    m.compose(new THREE.Vector3(x, g + h * k.centre, -y), q, new THREE.Vector3(r, h * k.half, 1));
     crowns.setMatrixAt(i, m);
-    m.compose(new THREE.Vector3(x, h * 0.2, -y), q, new THREE.Vector3(1, h * 0.4, 1));
+    const th = Math.max(1.2, h * k.trunk), tw = id === 3 ? 1.7 : id === 1 ? 1.2 : 1;
+    m.compose(new THREE.Vector3(x, g + th / 2, -y), q, new THREE.Vector3(tw, th, tw));
     trunks.setMatrixAt(i, m);
   });
   const group = new THREE.Group();
   group.add(crowns, trunks);
-  return { group, count: list.length };
+  return { group, count: n };
 }
 
-export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater } = {}) {
+export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater, heightAt = () => 0 } = {}) {
   const group = new THREE.Group();
-  group.add(createGreens(data.greens, uniforms));
-  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater });
+  group.add(createGreens(data.greens, uniforms, heightAt));
+  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, heightAt });
   group.add(paths.mesh);
-  const trees = createTrees(data.trees, uniforms, { max: maxTrees });
+  const trees = createTrees(data.trees, uniforms, { max: maxTrees, heightAt });
   group.add(trees.group);
   return { group, lamps: paths.lamps, stats: { greens: data.greens.length, paths: data.paths.length, pathLights: paths.lamps.length, trees: trees.count } };
 }

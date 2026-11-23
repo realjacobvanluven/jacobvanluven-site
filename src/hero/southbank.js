@@ -131,7 +131,7 @@ function createSeawallFurniture(shoreline, { camera, distance, isWater }) {
  * Walkers and cyclists on the paths and the seawall. Each follows one route (a polyline) back and forth at its own
  * speed; cyclists carry a small white front light (returned as `cyclistLights`, positions rewritten each frame).
  */
-function createPeople(routes, { walkers, cyclists, camera }) {
+function createPeople(routes, { walkers, cyclists, camera, heightAt = () => 0 }) {
   const rand = rng(404);
   const group = new THREE.Group();
   const walkRoutes = routes.filter((r) => r.length > 40);
@@ -184,7 +184,7 @@ function createPeople(routes, { walkers, cyclists, camera }) {
     const L = a.route.length;
     const s = (((a.s0 + a.dir * a.speed * time) % L) + L) % L;
     const p = sample(a.route.line, a.route.cum, s);
-    return { x: p.x - p.uy * a.off, y: p.y + p.ux * a.off, ux: p.ux * a.dir, uy: p.uy * a.dir, h: a.route.y };
+    return { x: p.x - p.uy * a.off, y: p.y + p.ux * a.off, ux: p.ux * a.dir, uy: p.uy * a.dir, h: a.route.y + (a.route.y < 1 ? heightAt(p.x, p.y) : 0) };
   };
   return {
     group,
@@ -218,7 +218,7 @@ function createPeople(routes, { walkers, cyclists, camera }) {
  * @param {{ camera: number[], isWater: Function, buildings: object[], detail: object }} opts
  *   detail: { furnitureDistance, parkedDistance, maxParked, streetTrees, walkers, cyclists }
  */
-export function createSouthBank(data, uniforms, { camera, isWater, buildings, detail }) {
+export function createSouthBank(data, uniforms, { camera, isWater, buildings, detail, heightAt = () => 0 }) {
   const group = new THREE.Group();
   group.name = 'south-bank';
   const rand = rng(88);
@@ -250,17 +250,37 @@ export function createSouthBank(data, uniforms, { camera, isWater, buildings, de
       }
     }
   }
+  // Lawns and parks: the map has few mapped trees inside them, so scatter some (about one per 380 m², kept off the buildings and
+  // the water, and clear of the edges so they don't crowd the paths).
+  const inRing = (x, y, r) => {
+    let hit = false;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) if (r[i][1] > y !== r[j][1] > y && x < ((r[j][0] - r[i][0]) * (y - r[i][1])) / (r[j][1] - r[i][1]) + r[i][0]) hit = !hit;
+    return hit;
+  };
+  for (const g of data.greens) {
+    if (g.kind !== 0) continue;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of g.ring) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    if (dist((x0 + x1) / 2, (y0 + y1) / 2) > detail.parkedDistance * 1.3) continue;
+    const want = Math.min(90, Math.floor(((x1 - x0) * (y1 - y0) * 0.55) / 380));
+    for (let k = 0, placed = 0; k < want * 6 && placed < want; k++) {
+      const x = x0 + rand() * (x1 - x0), y = y0 + rand() * (y1 - y0);
+      if (!inRing(x, y, g.ring) || isWater(x, y) || blocked(x, y, 3.5)) continue;
+      treePts.push([x, y]);
+      placed++;
+    }
+  }
   cars.sort((a, b) => dist(a.x, a.y) - dist(b.x, b.y));
   const parked = cars.slice(0, detail.maxParked);
   if (parked.length) {
     const bodies = createCarBodies(parked.length, uniforms, rand);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
-    parked.forEach((c, i) => bodies.mesh.setMatrixAt(i, m.compose(v.set(c.x, 0, -c.y), q.setFromAxisAngle(up, c.a), one)));
+    parked.forEach((c, i) => bodies.mesh.setMatrixAt(i, m.compose(v.set(c.x, heightAt(c.x, c.y), -c.y), q.setFromAxisAngle(up, c.a), one)));
     bodies.mesh.instanceMatrix.needsUpdate = true;
     group.add(bodies.mesh);
   }
   treePts.sort((a, b) => dist(a[0], a[1]) - dist(b[0], b[1]));
-  const trees = treePts.length ? createTrees(treePts, uniforms, { max: detail.streetTrees }) : null;
+  const trees = treePts.length ? createTrees(treePts, uniforms, { max: detail.streetTrees, heightAt }) : null;
   if (trees) group.add(trees.group);
 
   // Routes for walkers and cyclists: the seawall (offset inland from the shoreline) and the mapped footpaths.
@@ -282,7 +302,7 @@ export function createSouthBank(data, uniforms, { camera, isWater, buildings, de
     addRoute(off, TOP);
   }
   for (const path of data.paths) addRoute(path.line, 0.1);
-  const people = createPeople(routes, { walkers: detail.walkers, cyclists: detail.cyclists, camera });
+  const people = createPeople(routes, { walkers: detail.walkers, cyclists: detail.cyclists, camera, heightAt });
   group.add(people.group);
 
   return {
