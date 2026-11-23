@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { skyGlsl, hashGlsl, groundGlsl, fogGlsl } from './shaders.js';
 import { miterOffsets } from './ribbon.js';
+import { deckHeight } from './seawall.js';
 
 /**
  * The waterfront and parks, the most visible ground in the shot (from OpenStreetMap via the data file):
@@ -32,16 +33,20 @@ function createGreens(greens, uniforms, heightAt = () => 0) {
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       varying float vKind; varying vec3 vWorld;
       void main() {
-        float n = hash12(floor(vWorld.xz / 4.0)) * 0.5 + hash12(floor(vWorld.xz / 13.0)) * 0.5;
-        vec3 grass = vec3(0.010, 0.019, 0.011) * (0.75 + 0.5 * n);
-        vec3 field = vec3(0.016, 0.030, 0.017) * (0.9 + 0.2 * n);
+        // Lawn: broad drifts of lighter and darker grass, fine blade-scale grain, faint mowing stripes.
+        float drift = gfbm(vWorld.xz / 18.0);
+        float grain = gfbm(vWorld.xz * 2.4);
+        float stripe = 0.94 + 0.06 * sin(dot(vWorld.xz, vec2(0.8, 0.6)) * 0.9);
+        vec3 grass = mix(vec3(0.009, 0.018, 0.010), vec3(0.016, 0.028, 0.012), drift) * (0.82 + 0.36 * grain) * stripe;
+        vec3 field = mix(vec3(0.014, 0.028, 0.015), vec3(0.020, 0.034, 0.016), drift) * (0.85 + 0.3 * grain) * stripe;
         // Faint pitch markings.
         vec2 g = fract(vWorld.xz / 18.0);
         float lines = (1.0 - smoothstep(0.0, 0.03, min(g.x, g.y))) * 0.35;
-        vec3 play = vec3(0.03, 0.022, 0.018);
+        vec3 play = vec3(0.03, 0.022, 0.018) * (0.8 + 0.4 * grain);
         vec3 col = vKind < 0.5 ? grass : vKind < 1.5 ? field + vec3(0.03) * lines : play;
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
@@ -51,7 +56,7 @@ function createGreens(greens, uniforms, heightAt = () => 0) {
 }
 
 /** Footpaths (light pavers) and bike paths (asphalt, dashed centre line), with path lights. */
-function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, heightAt = () => 0 }) {
+function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, heightAt = () => 0, shoreDistance = () => Infinity }) {
   const pos = [], arc = [], across = [], half = [], cyc = [];
   const lamps = [];
   for (const p of paths) {
@@ -71,7 +76,8 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
       const v = [[ax - oa[0], ay - oa[1], cum, -w], [bx - ob[0], by - ob[1], cum + seg, -w], [bx + ob[0], by + ob[1], cum + seg, w], [ax + oa[0], ay + oa[1], cum, w]];
       for (const k of [0, 1, 2, 0, 2, 3]) {
         const [x, y, a, c] = v[k];
-        pos.push(x, 0.1 + heightAt(x, y), -y); arc.push(a); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
+        // On or beside the seawall: ride the deck and its slope, so the path and the deck are one surface.
+        pos.push(x, Math.max(0.1 + heightAt(x, y), deckHeight(shoreDistance(x, y)) + 0.03), -y); arc.push(a); across.push(c); half.push(w); cyc.push(p.cycle ? 1 : 0);
       }
       // Path lights (footpaths only), every lampSpacing metres along the arc.
       if (!p.cycle) {
@@ -109,20 +115,28 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       uniform float uSpacing;
       varying vec3 vWorld; varying float vArc; varying float vAcross; varying float vHalf; varying float vCycle;
       void main() {
-        float edge = smoothstep(vHalf, vHalf - 0.4, abs(vAcross));
+        float a = abs(vAcross);
+        float edge = smoothstep(vHalf, vHalf - 0.3, a);
         // Pools of light under the path lights (footpaths), a soft general glow along bike paths.
         float along = mod(vArc, uSpacing);
         along = min(along, uSpacing - along); // distance to the nearest path light
         float pool = exp(-(along * along) / (2.0 * 4.0 * 4.0));
         vec3 warm = vec3(1.0, 0.68, 0.36);
-        vec3 pavers = vec3(0.07, 0.068, 0.065) * (0.85 + 0.3 * hash12(floor(vWorld.xz * 1.5)));
-        vec3 asphalt = vec3(0.03, 0.031, 0.035);
-        float dash = vCycle * (1.0 - smoothstep(0.06, 0.14, abs(vAcross))) * step(0.5, fract(vArc / 4.0));
-        vec3 base = mix(pavers, asphalt, vCycle);
+        // Surface: paving slabs with joints and grain for footpaths; asphalt with a fine grit for bike paths.
+        float grain = gfbm(vWorld.xz * 3.0);
+        float joint = 1.0 - 0.22 * (1.0 - step(0.05, fract(vArc / 2.4))) * (1.0 - vCycle);
+        vec3 pavers = vec3(0.07, 0.068, 0.065) * (0.78 + 0.4 * grain) * joint;
+        vec3 asphalt = vec3(0.03, 0.031, 0.035) * (0.8 + 0.4 * grain);
+        // A kerb along both edges, and a little wear down the middle.
+        float kerb = smoothstep(vHalf - 0.55, vHalf - 0.3, a);
+        float wear = 1.0 + 0.14 * (1.0 - a / vHalf);
+        float dash = vCycle * (1.0 - smoothstep(0.06, 0.14, a)) * step(0.5, fract(vArc / 4.0));
+        vec3 base = mix(pavers, asphalt, vCycle) * wear * (1.0 - 0.5 * kerb);
         vec3 col = base * 0.45 + base * warm * pool * mix(3.2, 1.6, vCycle) + vec3(0.25, 0.22, 0.12) * dash * (0.2 + pool);
         gl_FragColor = vec4(applyFog(col, vWorld), edge);
       }
@@ -259,11 +273,25 @@ export function createTrees(trees, uniforms, { max, heightAt = () => 0 }) {
   return { group, count: n };
 }
 
-export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater, heightAt = () => 0 } = {}) {
+/** Lamp posts under the glowing lamp points: thin dark poles with a small head, so the lights aren't floating. */
+export function createLampPosts(lamps, { height, near = () => true } = {}) {
+  const list = lamps.filter((l) => near(l.p[0], -l.p[2]));
+  const geo = new THREE.CylinderGeometry(0.06, 0.09, 1, 5);
+  geo.translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0x1b1a1e }), Math.max(1, list.length));
+  mesh.count = list.length;
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  list.forEach((l, i) => mesh.setMatrixAt(i, m.compose(new THREE.Vector3(l.p[0], l.p[1] - height, l.p[2]), q, new THREE.Vector3(1, height, 1))));
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater, heightAt = () => 0, shoreDistance } = {}) {
   const group = new THREE.Group();
   group.add(createGreens(data.greens, uniforms, heightAt));
-  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, heightAt });
+  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, heightAt, shoreDistance });
   group.add(paths.mesh);
+  group.add(createLampPosts(paths.lamps, { height: 3.5, near: (x, y) => Math.hypot(x - camera[0], y - camera[1]) < 800 }));
   const trees = createTrees(data.trees, uniforms, { max: maxTrees, heightAt });
   group.add(trees.group);
   return { group, lamps: paths.lamps, stats: { greens: data.greens.length, paths: data.paths.length, pathLights: paths.lamps.length, trees: trees.count } };

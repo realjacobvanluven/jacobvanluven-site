@@ -91,6 +91,29 @@ float hash12(vec2 p) {
 }
 `;
 
+/**
+ * Smooth value noise and the colour of open ground (asphalt, paving, lawn): organic broad patches with finer variation,
+ * not the square lots the first version used. Needs hashGlsl.
+ */
+export const groundGlsl = /* glsl */ `
+float gnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float gfbm(vec2 p) { return gnoise(p) * 0.55 + gnoise(p * 2.13 + 7.1) * 0.3 + gnoise(p * 4.7 + 13.3) * 0.15; }
+vec3 groundColor(vec2 p) {
+  float broad = gfbm(p / 70.0);
+  float mid = gfbm(p / 11.0);
+  float fine = gfbm(p * 0.9);
+  float lawn = smoothstep(0.42, 0.56, gfbm(p / 45.0 + 3.0));
+  vec3 paved = vec3(0.020, 0.021, 0.025);
+  vec3 grass = vec3(0.014, 0.027, 0.015);
+  vec3 col = mix(paved, grass, lawn) * (0.72 + 0.5 * mid) * (0.88 + 0.24 * fine);
+  return col + vec3(0.006, 0.004, 0.002) * broad;
+}
+`;
+
 /** Exponential distance fog toward the horizon colour. */
 export const fogGlsl = /* glsl */ `
 uniform float uFogDensity;

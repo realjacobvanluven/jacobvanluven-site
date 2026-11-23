@@ -6,9 +6,10 @@ import { createSignatures } from './signatures.js';
 import { createGranville } from './granville.js';
 import { createSouthBank } from './southbank.js';
 import { createIslands } from './islands.js';
+import { createShoreDistance } from './ribbon.js';
 import { decodeTerrain, createTerrain } from './terrain.js';
 import { createStreets } from './streets.js';
-import { createWaterfront } from './waterfront.js';
+import { createWaterfront, createLampPosts } from './waterfront.js';
 import { createWater, createGround } from './water.js';
 import { createMountains, northShoreLightPoints, demHeightAt, terrainHeight } from './mountains.js';
 import { createLightPoints, aviationLights, distantLights } from './lights.js';
@@ -273,11 +274,12 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const seawall = createSeawall(data.shoreline, uniforms, { camera: CAMERA_POSITION, isWater, treeDistance: data.trees.length ? 0 : 1600 });
   scene.add(seawall.group);
   addLights(seawall.lamps, 0);
+  scene.add(createLampPosts(seawall.lamps, { height: 3.6, near: (x, y) => Math.hypot(x - CAMERA_POSITION[0], y - CAMERA_POSITION[1]) < 900 }));
   const islands = createIslands(data.shoreline, data.causeways, uniforms);
   scene.add(islands.group);
 
   // Waterfront and parks: lawns, footpaths and bike paths with path lights, mapped trees.
-  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater, heightAt: groundAt });
+  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater, heightAt: groundAt, shoreDistance: createShoreDistance(data.shoreline) });
   scene.add(waterfront.group);
   addLights(waterfront.lamps, 2);
 

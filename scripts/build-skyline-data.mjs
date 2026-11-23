@@ -737,6 +737,7 @@ for (const e of groundData.elements) {
 // drop any segment that runs along (nearly parallel, within DEDUPE_M of) one already kept; keep crossings and branches.
 const DEDUPE_M = 2.6;
 const paths = [];
+const keptLines = [];
 {
   const CELL = 8, grid = new Map();
   const key = (i, j) => `${i},${j}`;
@@ -760,14 +761,55 @@ const paths = [];
   for (const pl of pathLines.sort((a, b) => length(b.line) - length(a.line))) {
     before += length(pl.line);
     let run = [pl.line[0]];
-    const flush = () => { if (run.length >= 2 && length(run) >= 6) { paths.push([pl.cycle ? 1 : 0, ...encodeRing(run)]); after += length(run); for (let i = 1; i < run.length; i++) addSeg(run[i - 1], run[i]); } run = []; };
+    const flush = () => { if (run.length >= 2 && length(run) >= 6) { keptLines.push({ cycle: pl.cycle, line: run }); after += length(run); for (let i = 1; i < run.length; i++) addSeg(run[i - 1], run[i]); } run = []; };
     for (let i = 1; i < pl.line.length; i++) {
       const a = pl.line[i - 1], b = pl.line[i];
       if (covered(a, b)) { flush(); run = [b]; } else run.push(b);
     }
     flush();
   }
-  console.log(`Paths: ${pathLines.length} ways, ${(before / 1000).toFixed(1)} km → ${paths.length} lines, ${(after / 1000).toFixed(1)} km after removing duplicates`);
+  console.log(`Paths: ${pathLines.length} ways, ${(before / 1000).toFixed(1)} km → ${keptLines.length} lines, ${(after / 1000).toFixed(1)} km after removing duplicates`);
+}
+// Dead ends: a short path that stops in the middle of nothing (it joins no other path, street or shoreline at one end) is a
+// fragment of the map data, and reads as a path going nowhere. Remove those, repeatedly (removing one can orphan another).
+{
+  const CELL = 10, JOIN = 3.5;
+  const key = (i, j) => `${i},${j}`;
+  const fixed = new Map(); // streets and shoreline: [a, b, reach]
+  const addFixed = (a, b, reach) => {
+    for (let i = Math.floor((Math.min(a[0], b[0]) - reach) / CELL); i <= Math.floor((Math.max(a[0], b[0]) + reach) / CELL); i++)
+      for (let j = Math.floor((Math.min(a[1], b[1]) - reach) / CELL); j <= Math.floor((Math.max(a[1], b[1]) + reach) / CELL); j++)
+        (fixed.get(key(i, j)) ?? fixed.set(key(i, j), []).get(key(i, j))).push([a, b, reach]);
+  };
+  for (const e of roadsData.elements) {
+    if (e.type !== 'way' || !e.geometry) continue;
+    const g = e.geometry.map((q) => toLocal([q.lon, q.lat]));
+    for (let i = 1; i < g.length; i++) addFixed(g[i - 1], g[i], 8);
+  }
+  for (const line of shoreLines) for (let i = 1; i < line.length; i++) addFixed(line[i - 1], line[i], 6);
+  const dseg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)); return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t); };
+  const length = (l) => l.reduce((n, p, i) => n + (i ? Math.hypot(p[0] - l[i - 1][0], p[1] - l[i - 1][1]) : 0), 0);
+  let lines = keptLines.slice(), removed = 0;
+  for (let pass = 0; pass < 4; pass++) {
+    const grid = new Map();
+    lines.forEach((l, id) => { for (let i = 1; i < l.line.length; i++) { const a = l.line[i - 1], b = l.line[i]; for (let ci = Math.floor((Math.min(a[0], b[0]) - JOIN) / CELL); ci <= Math.floor((Math.max(a[0], b[0]) + JOIN) / CELL); ci++) for (let cj = Math.floor((Math.min(a[1], b[1]) - JOIN) / CELL); cj <= Math.floor((Math.max(a[1], b[1]) + JOIN) / CELL); cj++) (grid.get(key(ci, cj)) ?? grid.set(key(ci, cj), []).get(key(ci, cj))).push([id, a, b]); } });
+    const joined = (p, self) => {
+      for (const [id, a, b] of grid.get(key(Math.floor(p[0] / CELL), Math.floor(p[1] / CELL))) ?? []) if (id !== self && dseg(p, a, b) < JOIN) return true;
+      for (const [a, b, reach] of fixed.get(key(Math.floor(p[0] / CELL), Math.floor(p[1] / CELL))) ?? []) if (dseg(p, a, b) < reach) return true;
+      return false;
+    };
+    const next = lines.filter((l, id) => {
+      const a = l.line[0], b = l.line[l.line.length - 1];
+      const loop = Math.hypot(a[0] - b[0], a[1] - b[1]) < 2;
+      const dangling = !loop && (!joined(a, id) || !joined(b, id));
+      return !(dangling && length(l.line) < 45);
+    });
+    removed += lines.length - next.length;
+    if (next.length === lines.length) break;
+    lines = next;
+  }
+  for (const l of lines) paths.push([l.cycle ? 1 : 0, ...encodeRing(l.line)]);
+  console.log(`Paths: removed ${removed} dead-end stubs; ${paths.length} lines remain`);
 }
 
 // Trees sorted by distance (nearest first) so the scene can cap the count per device.

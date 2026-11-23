@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { skyGlsl, hashGlsl, groundGlsl, fogGlsl } from './shaders.js';
 
 /**
  * The land south of False Creek rises toward Broadway (the Fairview slopes): a real terrain surface instead of a flat
@@ -54,15 +54,11 @@ export function createTerrain(terrain, uniforms) {
     fragmentShader: /* glsl */ `
       ${skyGlsl}
       ${hashGlsl}
+      ${groundGlsl}
       ${fogGlsl}
       varying vec3 vWorld;
       void main() {
-        // Same patchy lots, lawns and plazas as the flat ground.
-        vec2 cell = floor(vWorld.xz / 22.0 + vec2(hash12(floor(vWorld.xz / 90.0)) * 0.5));
-        float v = hash12(cell);
-        vec3 base = mix(vec3(0.014, 0.015, 0.018), vec3(0.012, 0.016, 0.013), step(0.75, v));
-        base *= 0.88 + 0.24 * hash12(cell * 1.7 + 3.0);
-        base += vec3(0.006, 0.004, 0.002) * hash12(floor(vWorld.xz / 60.0));
+        vec3 base = groundColor(vWorld.xz); // same open ground as the flat plane
         // Slope lighting from the surface itself: west-facing slopes catch the afterglow, east-facing ones fall into shade.
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
         if (n.y < 0.0) n = -n;

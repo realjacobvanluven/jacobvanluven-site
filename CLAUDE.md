@@ -144,6 +144,9 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   above the 3 m seawall level, feathered at its edges, flat on the north bank, water and Granville Island); streets, paths, lawns,
   lamps, trees, parked cars and people follow it through `heightAt`. Trees come in five kinds (round broadleaf, layered conifer, tall
   columnar, broad spreading, small ornamental) with per-tree tints (some autumn gold and copper), and parks get scattered trees.
+  Fifth pass (2026-11-22, the foreground): the data build removes dead-end path stubs; open ground, lawns and paths use smooth noise
+  textures (`groundGlsl` in `shaders.js`) instead of square patches, with kerbs, slab joints and wear on paths; paths ride the seawall
+  deck and its slope exactly (`deckHeight` in `seawall.js`, `createShoreDistance` in `ribbon.js`); path and seawall lamps stand on posts.
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

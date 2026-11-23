@@ -43,3 +43,30 @@ export function isIsland(line) {
   }
   return perimeter < 900 && area > 0; // counter-clockwise: land on the left, i.e. inside
 }
+
+/**
+ * Distance from a point to the nearest shoreline (metres, or Infinity beyond `reach`), for lining things up with the
+ * seawall deck. Islands are left out: they have no deck.
+ */
+export function createShoreDistance(lines, reach = 12) {
+  const CELL = 16, grid = new Map();
+  const key = (i, j) => `${i},${j}`;
+  for (const line of lines) {
+    if (isIsland(line)) continue;
+    for (let k = 1; k < line.length; k++) {
+      const a = line[k - 1], b = line[k];
+      for (let i = Math.floor((Math.min(a[0], b[0]) - reach) / CELL); i <= Math.floor((Math.max(a[0], b[0]) + reach) / CELL); i++)
+        for (let j = Math.floor((Math.min(a[1], b[1]) - reach) / CELL); j <= Math.floor((Math.max(a[1], b[1]) + reach) / CELL); j++)
+          (grid.get(key(i, j)) ?? grid.set(key(i, j), []).get(key(i, j))).push([a, b]);
+    }
+  }
+  return (x, y) => {
+    let best = Infinity;
+    for (const [a, b] of grid.get(key(Math.floor(x / CELL), Math.floor(y / CELL))) ?? []) {
+      const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2));
+      best = Math.min(best, Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t));
+    }
+    return best <= reach ? best : Infinity;
+  };
+}
