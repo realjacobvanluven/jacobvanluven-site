@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createTrees } from './waterfront.js';
+import { isIsland } from './ribbon.js';
 import { createCarBodies } from './streets.js';
 
 /**
@@ -72,7 +73,7 @@ function createSeawallFurniture(shoreline, { camera, distance, isWater }) {
   const posts = [], benches = [], rail = [];
   const rand = rng(31);
   for (const line of shoreline) {
-    if (!line.some(([x, y]) => near(x, y))) continue;
+    if (isIsland(line) || !line.some(([x, y]) => near(x, y))) continue;
     const cum = cumulative(line);
     const total = cum[cum.length - 1];
     let prev = null;
@@ -271,6 +272,7 @@ export function createSouthBank(data, uniforms, { camera, isWater, buildings, de
     if (cum[cum.length - 1] > 30) routes.push({ line: pts, cum, length: cum[cum.length - 1], y, near: Math.min(...pts.map(([x, y]) => dist(x, y))) });
   };
   for (const line of data.shoreline) {
+    if (isIsland(line)) continue;
     // Offset to the seawall path (land is on the left of the coastline direction).
     const off = line.map((p, i) => {
       const a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)];

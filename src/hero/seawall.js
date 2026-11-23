@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
-import { miterOffsets } from './ribbon.js';
+import { miterOffsets, isIsland } from './ribbon.js';
 
 /**
  * The seawall: a clean concrete edge along the shoreline, a paved path with warm pools of light under
@@ -41,6 +41,7 @@ export function createSeawall(shoreline, uniforms, { camera = [0, 0], maxDistanc
 
   for (const line of shoreline) {
     if (!line.some(([x, y]) => near(x, y, maxDistance))) continue;
+    if (isIsland(line)) continue; // natural islands get a rocky shore instead (islands.js)
     // Mitered inland edges (land is on the left): the deck and its sloping embankment stay continuous through bends.
     const inner = miterOffsets(line, PATH_WIDTH), outer = miterOffsets(line, PATH_WIDTH + EMBANKMENT);
     let arc = 0;

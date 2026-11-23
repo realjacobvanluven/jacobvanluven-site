@@ -135,6 +135,11 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   clipped where they would cross water, and the deck slopes down to the ground; open-water sailboats and cruisers plus up to
   four Aquabus-style ferries (`openBoats`, `ferries` in `SCENE_DETAIL`); Granville Island re-lit with muted weathered colours,
   facing-dependent light, stepped multi-bay roofs on the market halls and mostly pale-concrete silos.
+  Third pass (2026-11-22): Habitat Island (the small island beside Hinge Park, near the camera) is a natural island, not part of the
+  seawall: `src/hero/islands.js` gives closed coastline rings a rocky rim and planted interior, and bridges the gap to the shore
+  with a rock-and-paver causeway (found by the data build: `causeways` in the data file); islands are skipped by the seawall,
+  railings and people. Trees are shaded round canopies with a leafy edge (camera-facing, `createTrees` in `waterfront.js`) instead
+  of faceted meshes. The data build removes duplicate parallel path segments (`DEDUPE_M`).
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

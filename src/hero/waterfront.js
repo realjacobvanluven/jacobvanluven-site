@@ -133,39 +133,66 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
   return { mesh, lamps };
 }
 
-/** Mapped trees: low-poly crowns with a dark trunk, lit warm from below near the paths. */
+/**
+ * Trees: each crown is a camera-facing disc shaded as a sphere (smooth, no facets), with a ragged leafy edge and clumped
+ * shading, so it reads as foliage rather than a faceted lump, at a fraction of the triangles of a mesh crown. A dark
+ * trunk below. Lit warm from below near the paths.
+ */
 export function createTrees(trees, uniforms, { max }) {
   const list = trees.slice(0, max);
-  const crownGeo = new THREE.IcosahedronGeometry(1, 1);
   const mat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: /* glsl */ `
-      varying vec3 vWorld; varying vec3 vNormal; varying float vSeed; varying float vRel;
+      varying vec3 vWorld; varying vec2 vUv; varying float vSeed; varying float vRel;
+      varying vec3 vRight; varying vec3 vUp; varying vec3 vBack;
       void main() {
-        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
-        vWorld = w.xyz;
-        vNormal = normalize(mat3(modelMatrix * instanceMatrix) * normal);
-        vSeed = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
-        vRel = position.y; // -1 bottom … 1 top of the crown
-        gl_Position = projectionMatrix * viewMatrix * w;
+        mat4 m = modelMatrix * instanceMatrix;
+        vec3 c = m[3].xyz;
+        float R = 0.5 * (length(m[0].xyz) + length(m[1].xyz));
+        vRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+        vUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        vBack = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+        vUv = position.xy;
+        vSeed = fract(sin(dot(c.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vec3 w = c + (vRight * position.x + vUp * position.y) * R;
+        vWorld = w;
+        vRel = 0.0;
+        gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
       }
     `,
     fragmentShader: /* glsl */ `
       ${skyGlsl}
+      ${hashGlsl}
       ${fogGlsl}
-      varying vec3 vWorld; varying vec3 vNormal; varying float vSeed; varying float vRel;
+      varying vec3 vWorld; varying vec2 vUv; varying float vSeed; varying float vRel;
+      varying vec3 vRight; varying vec3 vUp; varying vec3 vBack;
+      float vnoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
       void main() {
-        vec3 n = normalize(vNormal);
-        vec3 leaf = mix(vec3(0.012, 0.022, 0.014), vec3(0.02, 0.026, 0.012), vSeed);
-        float sky = 0.35 + 0.65 * max(n.y, 0.0);
-        vec3 col = leaf * sky * vec3(0.7, 0.8, 1.0);
+        float r2 = dot(vUv, vUv);
+        float ang = atan(vUv.y, vUv.x);
+        // Ragged edge: lumps of foliage around the rim.
+        float edge = 0.84 + 0.1 * hash12(vec2(floor(ang * 6.0), vSeed * 40.0)) + 0.06 * sin(ang * 11.0 + vSeed * 30.0);
+        if (r2 > edge * edge) discard;
+        vec3 nv = vec3(vUv, sqrt(max(1.0 - r2 / (edge * edge), 0.0)));
+        vec3 n = normalize(vRight * nv.x + vUp * nv.y + vBack * nv.z);
+        // Leaf clumps: shading varies in patches across the crown.
+        float clump = 0.65 + 0.7 * vnoise(vUv * 3.2 + vSeed * 17.0);
+        float fine = 0.88 + 0.24 * vnoise(vUv * 9.0 + vSeed * 5.0);
+        vec3 leaf = mix(vec3(0.014, 0.026, 0.015), vec3(0.026, 0.034, 0.014), vSeed) * clump * fine;
+        float sky = 0.3 + 0.7 * max(n.y, 0.0);
+        vec3 col = leaf * sky * vec3(0.8, 0.95, 1.2) * 1.6;
         // Warm light from the lamps below, on the underside.
-        col += vec3(1.0, 0.62, 0.3) * 0.045 * smoothstep(0.3, -1.0, vRel) * (0.5 + vSeed);
+        col += vec3(1.0, 0.62, 0.3) * 0.055 * smoothstep(0.2, -0.9, n.y) * (0.5 + vSeed);
         gl_FragColor = vec4(applyFog(col, vWorld), 1.0);
       }
     `,
   });
-  const crowns = new THREE.InstancedMesh(crownGeo, mat, list.length);
+  const crowns = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2), mat, list.length);
+  crowns.frustumCulled = false; // billboards: the bounding sphere of one quad is wrong for the whole set
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.28, 1, 5), new THREE.MeshLambertMaterial({ color: 0x120f0d }), list.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion();
   let seed = 5;
@@ -173,7 +200,7 @@ export function createTrees(trees, uniforms, { max }) {
   list.forEach(([x, y], i) => {
     const h = 6 + rand() * 9, r = 2 + rand() * 2.6;
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * 6.28);
-    m.compose(new THREE.Vector3(x, h * 0.62, -y), q, new THREE.Vector3(r, h * 0.38, r * (0.85 + rand() * 0.3)));
+    m.compose(new THREE.Vector3(x, h * 0.62, -y), q, new THREE.Vector3(r * 1.1, h * 0.38 * 1.15, r * 1.1));
     crowns.setMatrixAt(i, m);
     m.compose(new THREE.Vector3(x, h * 0.2, -y), q, new THREE.Vector3(1, h * 0.4, 1));
     trunks.setMatrixAt(i, m);

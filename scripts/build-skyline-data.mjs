@@ -481,6 +481,53 @@ const mask = buildWaterMask(shoreLines, MASK);
   console.log('South bank:', reached.reduce((n, v) => n + v, 0) * cell * cell / 1e6, 'km² of land');
 }
 
+// Small islands near the camera (Habitat Island, beside Hinge Park) are joined to the shore by a rock causeway in real life, but
+// the coastline data leaves them as islands. Find each one and the shortest gap to the mainland; the scene bridges it.
+const causeways = [];
+{
+  const X0 = -700, X1 = 700, Y0 = -350, Y1 = 450, CELL = 4;
+  const W = (X1 - X0) / CELL, H = (Y1 - Y0) / CELL;
+  const isLand = (i, j) => !mask.isWater(X0 + (i + 0.5) * CELL, Y0 + (j + 0.5) * CELL);
+  const comp = new Int32Array(W * H).fill(-1);
+  const comps = [];
+  for (let j0 = 0; j0 < H; j0++) for (let i0 = 0; i0 < W; i0++) {
+    if (comp[j0 * W + i0] >= 0 || !isLand(i0, j0)) continue;
+    const id = comps.length, cells = [], stack = [i0, j0];
+    comp[j0 * W + i0] = id;
+    let edge = false;
+    while (stack.length) {
+      const j = stack.pop(), i = stack.pop();
+      cells.push([i, j]);
+      if (i === 0 || j === 0 || i === W - 1 || j === H - 1) edge = true;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= W || b >= H || comp[b * W + a] >= 0 || !isLand(a, b)) continue;
+        comp[b * W + a] = id;
+        stack.push(a, b);
+      }
+    }
+    comps.push({ cells, edge, area: cells.length * CELL * CELL });
+  }
+  const toXY = ([i, j]) => [X0 + (i + 0.5) * CELL, Y0 + (j + 0.5) * CELL];
+  const mainland = comps.filter((c) => c.edge || c.area > 80000).flatMap((c) => c.cells);
+  for (const c of comps) {
+    if (c.edge || c.area < 800 || c.area > 40000) continue;
+    const [cx, cy] = c.cells.reduce((a, p) => [a[0] + toXY(p)[0] / c.cells.length, a[1] + toXY(p)[1] / c.cells.length], [0, 0]);
+    if (Math.hypot(cx, cy) > 500) continue;
+    let best = null;
+    for (const p of c.cells) {
+      const a = toXY(p);
+      for (const q of mainland) {
+        if (Math.abs(q[0] - p[0]) > 25 || Math.abs(q[1] - p[1]) > 25) continue;
+        const b = toXY(q), d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (!best || d < best.d) best = { a, b, d };
+      }
+    }
+    if (best && best.d < 80) causeways.push([...best.a, ...best.b]);
+    console.log(`Island near the camera: ${Math.round(c.area)} m² at ${Math.round(cx)},${Math.round(cy)}${best ? `; gap to the mainland ${best.d.toFixed(0)} m` : '; no mainland within 100 m'}`);
+  }
+}
+
 // Ground elevation under the south bank (Terrarium/CDEM), bilinear lookup.
 const elev = await sampleTerrain(SOUTH_ELEVATION, toLonLat, cachedBinary, USER_AGENT);
 const elevAt = ([x, y]) => {
@@ -630,7 +677,7 @@ console.log('SkyTrain:', skytrainLine.length, 'points', skytrainStations.map((s)
 // Waterfront/park detail near the camera (the most visible ground): paths, green areas, trees.
 const GROUND_RANGE = 1800;
 const nearView = (p) => inView(p) && (Math.hypot(...p) < GROUND_RANGE || southBank(p));
-const paths = [];
+const pathLines = []; // { cycle, line }: deduplicated into `paths` below
 const greens = [];
 const treePts = [];
 const GREEN_KIND = { park: 0, garden: 0, grass: 0, recreation_ground: 0, pitch: 1, playground: 2 };
@@ -648,7 +695,7 @@ for (const e of groundData.elements) {
     // water and the land under every bridge. The bridges themselves are modelled in src/hero/bridge.js.
     if (t.tunnel === 'yes' || (t.layer && +t.layer < 0) || (t.bridge && t.bridge !== 'boardwalk' && t.bridge !== 'no') || (t.layer && +t.layer >= 1)) continue;
     const line = simplify(pts, 1).filter(nearView);
-    if (line.length >= 2) paths.push([t.highway === 'cycleway' ? 1 : 0, ...encodeRing(line)]);
+    if (line.length >= 2) pathLines.push({ cycle: t.highway === 'cycleway', line });
   } else {
     const kind = GREEN_KIND[t.leisure ?? t.landuse];
     const ring = cleanRing(pts);
@@ -656,6 +703,43 @@ for (const e of groundData.elements) {
     greens.push([kind, ...encodeRing(ring)]);
   }
 }
+// OpenStreetMap maps many paths twice (parallel ways, overlapping segments), which draws as a jumble. Longest first:
+// drop any segment that runs along (nearly parallel, within DEDUPE_M of) one already kept; keep crossings and branches.
+const DEDUPE_M = 2.6;
+const paths = [];
+{
+  const CELL = 8, grid = new Map();
+  const key = (i, j) => `${i},${j}`;
+  const addSeg = (a, b) => {
+    for (let i = Math.floor((Math.min(a[0], b[0]) - DEDUPE_M) / CELL); i <= Math.floor((Math.max(a[0], b[0]) + DEDUPE_M) / CELL); i++)
+      for (let j = Math.floor((Math.min(a[1], b[1]) - DEDUPE_M) / CELL); j <= Math.floor((Math.max(a[1], b[1]) + DEDUPE_M) / CELL); j++)
+        (grid.get(key(i, j)) ?? grid.set(key(i, j), []).get(key(i, j))).push([a, b]);
+  };
+  const covered = (a, b) => {
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    for (const [c, d] of grid.get(key(Math.floor(mx / CELL), Math.floor(my / CELL))) ?? []) {
+      const ex = d[0] - c[0], ey = d[1] - c[1], l2 = ex * ex + ey * ey || 1;
+      const t = Math.max(0, Math.min(1, ((mx - c[0]) * ex + (my - c[1]) * ey) / l2));
+      if (Math.hypot(mx - (c[0] + ex * t), my - (c[1] + ey * t)) > DEDUPE_M) continue;
+      if (Math.abs(dx * ey + dy * ex) / (len * Math.sqrt(l2)) < 0.45) return true; // |sin angle| < ~27°: parallel
+    }
+    return false;
+  };
+  const length = (l) => l.reduce((n, p, i) => n + (i ? Math.hypot(p[0] - l[i - 1][0], p[1] - l[i - 1][1]) : 0), 0);
+  let before = 0, after = 0;
+  for (const pl of pathLines.sort((a, b) => length(b.line) - length(a.line))) {
+    before += length(pl.line);
+    let run = [pl.line[0]];
+    const flush = () => { if (run.length >= 2 && length(run) >= 6) { paths.push([pl.cycle ? 1 : 0, ...encodeRing(run)]); after += length(run); for (let i = 1; i < run.length; i++) addSeg(run[i - 1], run[i]); } run = []; };
+    for (let i = 1; i < pl.line.length; i++) {
+      const a = pl.line[i - 1], b = pl.line[i];
+      if (covered(a, b)) { flush(); run = [b]; } else run.push(b);
+    }
+    flush();
+  }
+  console.log(`Paths: ${pathLines.length} ways, ${(before / 1000).toFixed(1)} km → ${paths.length} lines, ${(after / 1000).toFixed(1)} km after removing duplicates`);
+}
+
 // Trees sorted by distance (nearest first) so the scene can cap the count per device.
 treePts.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 const trees = encodeRing(treePts);
@@ -761,6 +845,8 @@ const data = {
   // [xDm, yDm, headingDeciDegrees (bow direction, from +x toward +y), lengthDm, kind 0 motor / 1 sail]
   boats,
   signatures,
+  // Rock causeways [axDm, ayDm, bxDm, byDm] joining small islands to the shore (Habitat Island)
+  causeways: causeways.map((c) => c.map(dm)),
   // Granville Island (hand-built in src/hero/granville.js): its buildings [heightDm, baseDm, ...ring] and the Ocean
   // Concrete silos [xDm, yDm, radiusDm, heightDm].
   granville: {

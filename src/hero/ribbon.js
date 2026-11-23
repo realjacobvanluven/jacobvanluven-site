@@ -30,3 +30,16 @@ export function miterOffsets(pts, w, limit = 2.2) {
     return [mx * w * scale, my * w * scale];
   });
 }
+
+/** A small closed coastline ring (the land is inside it): an island, as opposed to the mainland shore. */
+export function isIsland(line) {
+  if (line.length < 4) return false;
+  const a = line[0], b = line[line.length - 1];
+  if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 1.5) return false;
+  let perimeter = 0, area = 0;
+  for (let i = 1; i < line.length; i++) {
+    perimeter += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+    area += line[i - 1][0] * line[i][1] - line[i][0] * line[i - 1][1];
+  }
+  return perimeter < 900 && area > 0; // counter-clockwise: land on the left, i.e. inside
+}

@@ -5,6 +5,7 @@ import { createBuildings, createFacadeMaterial } from './buildings.js';
 import { createSignatures } from './signatures.js';
 import { createGranville } from './granville.js';
 import { createSouthBank } from './southbank.js';
+import { createIslands } from './islands.js';
 import { createStreets } from './streets.js';
 import { createWaterfront } from './waterfront.js';
 import { createWater, createGround } from './water.js';
@@ -266,6 +267,8 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   const seawall = createSeawall(data.shoreline, uniforms, { camera: CAMERA_POSITION, isWater, treeDistance: data.trees.length ? 0 : 1600 });
   scene.add(seawall.group);
   addLights(seawall.lamps, 0);
+  const islands = createIslands(data.shoreline, data.causeways, uniforms);
+  scene.add(islands.group);
 
   // Waterfront and parks: lawns, footpaths and bike paths with path lights, mapped trees.
   const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater });
