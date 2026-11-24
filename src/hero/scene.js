@@ -4,6 +4,7 @@ import { skyGlsl, sunDirection } from './shaders.js';
 import { createBuildings, createFacadeMaterial } from './buildings.js';
 import { createSignatures } from './signatures.js';
 import { createGranville } from './granville.js';
+import { createVillage, isVillageBuilding, dedupeBuildings } from './village.js';
 import { createSouthBank } from './southbank.js';
 import { createIslands } from './islands.js';
 import { createShoreDistance } from './ribbon.js';
@@ -65,10 +66,12 @@ export const TURN_BEARING = { desktop: 38, phone: 56 };
 const SCENE_DETAIL = {
   desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600, planeScale: 1.6,
     openBoats: 18, ferries: 4,
-    southBank: { furnitureDistance: 900, parkedDistance: 850, maxParked: 700, streetTrees: 1400, peopleDistance: 480, walkers: 80, cyclists: 18 } },
+    southBank: { furnitureDistance: 900, parkedDistance: 850, maxParked: 700, streetTrees: 1400, peopleDistance: 480, walkers: 80, cyclists: 18 },
+    village: { balconyDistance: 700, balconyChance: 0.55, solar: true, maxTriangles: 260000 } },
   phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000, planeScale: 2.8,
     openBoats: 9, ferries: 3,
-    southBank: { furnitureDistance: 500, parkedDistance: 450, maxParked: 180, streetTrees: 400, peopleDistance: 320, walkers: 26, cyclists: 7 } },
+    southBank: { furnitureDistance: 500, parkedDistance: 450, maxParked: 180, streetTrees: 400, peopleDistance: 320, walkers: 26, cyclists: 7 },
+    village: { balconyDistance: 380, balconyChance: 0.4, solar: true, maxTriangles: 110000 } },
 };
 
 function insideRing([x, y], r) {
@@ -185,8 +188,12 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     const cx = sg.ring.reduce((t, p) => t + p[0], 0) / sg.ring.length, cy = sg.ring.reduce((t, p) => t + p[1], 0) / sg.ring.length;
     return sg.ring.map(([x, y]) => [cx + (x - cx) * 1.2, cy + (y - cy) * 1.2]);
   });
+  // Olympic Village buildings are built by village.js (detailed facades, balconies, roofs) and skip the generic prisms and the
+  // south-shore cull below.
+  const villageList = [];
   const buildingList = data.buildings.filter((b) => {
     if (sigRings.some((r) => insideRing(b.c, r))) { culled.signatures++; return false; }
+    if (isVillageBuilding(b)) { villageList.push(b); return false; }
     const d = distanceTo(b.c);
     if (d < 260 && b.c[1] < 150) {
       let crossesWater = false;
@@ -311,8 +318,12 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     const sp = streetTraffic.geometry.attributes.position;
     animators.push((time) => { streets.updateTraffic(sp.array, time); sp.needsUpdate = true; });
   }
+  // Olympic Village: detailed mid-rise buildings on the south shore (scenery only).
+  const village = createVillage(dedupeBuildings(villageList), uniforms, { camera: CAMERA_POSITION, heightAt: groundAt, detail: detail.village });
+  scene.add(village.group);
+  addLights(village.lights, 2);
   // South-bank street life: seawall railings and benches, parked cars, street trees, walkers and cyclists.
-  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList, detail: detail.southBank, heightAt: groundAt, skipPoint: offDeck });
+  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList.concat(villageList), detail: detail.southBank, heightAt: groundAt, skipPoint: offDeck });
   scene.add(southBank.group);
   animators.push(southBank.update);
   if (southBank.cyclistLights.length) {
@@ -520,7 +531,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, openBoats: openBoats.map((b) => [Math.round(b.x), Math.round(b.y), b.sail ? 'sail' : 'motor']), granville: granville.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, openBoats: openBoats.map((b) => [Math.round(b.x), Math.round(b.y), b.sail ? 'sail' : 'motor']), granville: granville.stats, village: village.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {

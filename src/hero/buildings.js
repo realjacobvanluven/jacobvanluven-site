@@ -36,6 +36,49 @@ export function createBuildings(buildings, uniforms, { camera = [0, 0], lod = {}
   });
 }
 
+/** Interior mapping for lit windows (shared with the Olympic Village shader). */
+export const roomInteriorGlsl = /* glsl */ `
+// A lit room seen through the glass (interior mapping): a box behind the facade, so ceiling, back wall,
+// side walls and floor shift with the camera instead of the window being a flat lit rectangle.
+// q: position on the window plane in room units (x along, y up, 0…1); dir: view ray in room space
+// (x along, y up, z into the room); room: width, height, depth (m).
+vec3 roomInterior(vec2 q, vec3 dir, vec3 room, vec3 lampCol, float seed, float office) {
+  vec3 p = vec3(q * room.xy, 0.0);
+  vec3 d = sign(dir) * max(abs(dir), vec3(1e-4));
+  vec3 tt = (step(0.0, d) * room - p) / d;
+  float t = min(min(tt.x, tt.y), tt.z);
+  vec3 h = (p + d * t) / room; // hit point, 0…1 in each axis
+  float fall = 1.0 - 0.45 * h.z; // light falls off into the room
+  vec3 col;
+  if (t == tt.y && d.y > 0.0) {
+    // Ceiling: a pool around the light fixture; offices get rows of panel lights.
+    vec2 c = h.xz - vec2(0.25 + 0.5 * fract(seed * 7.3), 0.35);
+    float spot = exp(-dot(c, c) * 14.0);
+    vec2 pg = fract(vec2(h.x * room.x / 2.4, h.z * room.z / 1.8));
+    float panels = step(0.18, pg.x) * step(pg.x, 0.62) * step(0.25, pg.y) * step(pg.y, 0.6);
+    col = lampCol * mix(0.45 + 2.2 * spot, 0.3 + 2.0 * panels, office);
+  } else if (t == tt.y) {
+    // Floor: darker; wood or carpet tone.
+    col = lampCol * mix(vec3(0.22, 0.15, 0.1), vec3(0.14, 0.14, 0.16), office) * (0.6 + 0.6 * fall);
+  } else if (t == tt.z) {
+    // Back wall, with furniture (sofa / cabinet / desks) and sometimes a picture or a doorway.
+    col = lampCol * 0.55 * mix(0.85, 1.0, h.y);
+    float fx = fract(seed * 13.1), fw = 0.18 + 0.25 * fract(seed * 5.7);
+    float furniture = step(abs(h.x - 0.2 - 0.6 * fx), fw) * step(h.y, mix(0.3, 0.28, office) + 0.08 * fract(seed * 3.3));
+    col *= 1.0 - 0.85 * furniture;
+    float pic = (1.0 - office) * step(0.5, fract(seed * 17.0)) * step(abs(h.x - 0.75 + 0.5 * fx), 0.09) * step(abs(h.y - 0.6), 0.08);
+    col = mix(col, lampCol * vec3(0.25, 0.22, 0.3), pic);
+    float door = step(0.6, fract(seed * 23.0)) * step(abs(h.x - 0.85), 0.07) * step(h.y, 0.75);
+    col *= 1.0 - 0.6 * door;
+  } else {
+    // Side walls.
+    col = lampCol * 0.36 * fall;
+    col *= 1.0 - 0.6 * office * step(h.y, 0.3) * step(0.5, fract(h.z * room.z / 2.0)); // desk rows
+  }
+  return col;
+}
+`;
+
 export function createFacadeMaterial(uniforms) {
   return new THREE.ShaderMaterial({
     uniforms,
@@ -71,45 +114,7 @@ export function createFacadeMaterial(uniforms) {
       varying float vTop;
       varying vec3 vWall; // distance along the wall, wall length, wall id (0 length: use the world grid)
 
-      // A lit room seen through the glass (interior mapping): a box behind the facade, so ceiling, back wall,
-      // side walls and floor shift with the camera instead of the window being a flat lit rectangle.
-      // q: position on the window plane in room units (x along, y up, 0…1); dir: view ray in room space
-      // (x along, y up, z into the room); room: width, height, depth (m).
-      vec3 roomInterior(vec2 q, vec3 dir, vec3 room, vec3 lampCol, float seed, float office) {
-        vec3 p = vec3(q * room.xy, 0.0);
-        vec3 d = sign(dir) * max(abs(dir), vec3(1e-4));
-        vec3 tt = (step(0.0, d) * room - p) / d;
-        float t = min(min(tt.x, tt.y), tt.z);
-        vec3 h = (p + d * t) / room; // hit point, 0…1 in each axis
-        float fall = 1.0 - 0.45 * h.z; // light falls off into the room
-        vec3 col;
-        if (t == tt.y && d.y > 0.0) {
-          // Ceiling: a pool around the light fixture; offices get rows of panel lights.
-          vec2 c = h.xz - vec2(0.25 + 0.5 * fract(seed * 7.3), 0.35);
-          float spot = exp(-dot(c, c) * 14.0);
-          vec2 pg = fract(vec2(h.x * room.x / 2.4, h.z * room.z / 1.8));
-          float panels = step(0.18, pg.x) * step(pg.x, 0.62) * step(0.25, pg.y) * step(pg.y, 0.6);
-          col = lampCol * mix(0.45 + 2.2 * spot, 0.3 + 2.0 * panels, office);
-        } else if (t == tt.y) {
-          // Floor: darker; wood or carpet tone.
-          col = lampCol * mix(vec3(0.22, 0.15, 0.1), vec3(0.14, 0.14, 0.16), office) * (0.6 + 0.6 * fall);
-        } else if (t == tt.z) {
-          // Back wall, with furniture (sofa / cabinet / desks) and sometimes a picture or a doorway.
-          col = lampCol * 0.55 * mix(0.85, 1.0, h.y);
-          float fx = fract(seed * 13.1), fw = 0.18 + 0.25 * fract(seed * 5.7);
-          float furniture = step(abs(h.x - 0.2 - 0.6 * fx), fw) * step(h.y, mix(0.3, 0.28, office) + 0.08 * fract(seed * 3.3));
-          col *= 1.0 - 0.85 * furniture;
-          float pic = (1.0 - office) * step(0.5, fract(seed * 17.0)) * step(abs(h.x - 0.75 + 0.5 * fx), 0.09) * step(abs(h.y - 0.6), 0.08);
-          col = mix(col, lampCol * vec3(0.25, 0.22, 0.3), pic);
-          float door = step(0.6, fract(seed * 23.0)) * step(abs(h.x - 0.85), 0.07) * step(h.y, 0.75);
-          col *= 1.0 - 0.6 * door;
-        } else {
-          // Side walls.
-          col = lampCol * 0.36 * fall;
-          col *= 1.0 - 0.6 * office * step(h.y, 0.3) * step(0.5, fract(h.z * room.z / 2.0)); // desk rows
-        }
-        return col;
-      }
+      ${roomInteriorGlsl}
 
       void main() {
         vec3 n = normalize(vNormal);

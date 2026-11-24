@@ -99,7 +99,7 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   (`&w=…&h=…&dpr=…`); re-render them whenever the scene's look changes.
   Hover/tap highlights + labels; click flies the camera in, then routes.
 - **Pan (2026-11-21):** drag (desktop), sideways swipe (touch), horizontal trackpad scroll or arrow keys turn the view
-  along the waterfront, from the Cambie Bridge to Science World; limits keep the frame inside the city data.
+  along the waterfront, from the Cambie Bridge to Science World; (left limit widened to 205° on 2026-11-23 so the Olympic Village waterfront comes into view;) limits keep the frame inside the city data.
 - **SkyTrain (2026-11-21):** the Expo Line from the east edge through Main Street–Science World to the Dunsmuir tunnel
   portal past Stadium–Chinatown (`src/hero/skytrain.js`, centreline from OSM in the data file): elevated guideway,
   both stations, trains both ways that stop at each station. Heights approximate (deck ~9 m).
@@ -167,6 +167,15 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   (10 m at 100 m); the ground decals have one fixed depth-offset order, bottom to top: terrain -1, lawns -3, sidewalks -4, streets -5,
   paths -6, turnarounds -7; lawns are split into ≤10 m triangles that follow the terrain; tiny closed street loops in the map (turning
   circles and traffic islands, under 90 m) are drawn as one round turnaround, not as street ribbons (`loopBulbs` in `streets.js`).
+  Olympic Village (2026-11-23): `src/hero/village.js` builds the mapped buildings in `VILLAGE_BOX` (Millennium Water and the blocks
+  south of it; deduplicated, taken out of the generic prism pass and the south-shore cull in `scene.js`) as detailed mid-rise
+  buildings: five cladding styles (brick, metal panel with coloured accent bays, timber, glass curtain wall, concrete with
+  spandrel stripes) with floor-to-ceiling windows fitted to each wall and interior-mapped lit rooms (`roomInteriorGlsl`, shared
+  from `buildings.js`), rounded corners, stepped top floors with a glazed terrace, parapets, penthouses, green roofs, solar rows,
+  mono-pitch metal roofs on small buildings, stacked balconies (slab plus glass or coloured railing) and shopfront canopies with
+  warm lights. Sizes per device in `SCENE_DETAIL.village`. Generated in the spirit of the neighbourhood, not a copy of any one
+  building. It is behind and beside the default camera, so it shows when the view pans toward Granville Island or Science World
+  and tilts down. Hero download is ~605 KB gzipped.
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange

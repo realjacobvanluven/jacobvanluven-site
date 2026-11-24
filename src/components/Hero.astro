@@ -633,7 +633,7 @@ const stops = await heroStops();
     let lastNow = 0;
     const portraitNow = () => innerWidth < innerHeight;
     // Horizontal pan (degrees from the opening bearing): from the Cambie Bridge on the left to Science World
-    // on the right. Limits keep the edges of the frame inside the city data (compass 250° … 74°; the left end takes in Granville Island).
+    // on the right. Limits keep the edges of the frame inside the city data (compass 205° … 74°; the left end takes in Granville Island and the Olympic Village waterfront).
     const pan = { value: 0, velocity: 0, dragging: false, coasting: false, lastT: 0 };
     let PAN_MIN = -30, PAN_MAX = 80;
     // Vertical tilt (degrees added to the opening pitch): down toward the water, up toward the sky and peaks.
@@ -643,7 +643,7 @@ const stops = await heroStops();
     const clampTilt = (v: number) => Math.min(TILT_MAX, Math.max(TILT_MIN, v));
     const panLimits = (f: View) => {
       const hfov = 2 * Math.atan(Math.tan((f.fov * Math.PI) / 360) * (innerWidth / innerHeight)) * (180 / Math.PI);
-      PAN_MIN = Math.min(0, 250 + hfov / 2 - f.bearing);
+      PAN_MIN = Math.min(0, 205 + hfov / 2 - f.bearing);
       PAN_MAX = Math.max(0, 74 + 360 - hfov / 2 - f.bearing);
     };
     const clampPan = (v: number) => Math.min(PAN_MAX, Math.max(PAN_MIN, v));
