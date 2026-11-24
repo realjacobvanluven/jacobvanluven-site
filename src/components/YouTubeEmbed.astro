@@ -1,4 +1,6 @@
 ---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
 /**
  * Click-to-load YouTube embed. Nothing from YouTube loads until the visitor activates the button;
  * then an iframe from youtube-nocookie.com replaces the poster. The 16:9 box is fixed, so nothing shifts.
@@ -11,19 +13,22 @@ interface Props {
   buttonLabel: string;
   /** Small line shown on the poster (no YouTube image is used). */
   posterKicker?: string;
+  /** Local poster image (kept in src/assets so Astro optimizes it). Falls back to a styled placeholder. */
+  poster?: ImageMetadata;
 }
 
-const { id, url, title, buttonLabel, posterKicker } = Astro.props;
+const { id, url, title, buttonLabel, posterKicker, poster } = Astro.props;
 ---
 
 <div class="yt" data-yt-id={id} data-yt-title={title}>
   <div class="frame">
     <button type="button" class="poster" aria-label={buttonLabel} hidden>
-      {posterKicker && <span class="kicker label">{posterKicker}</span>}
+      {poster && <Image src={poster} alt="" widths={[343, 640, 1000]} sizes="(min-width: 40rem) 40rem, calc(100vw - 2rem)" loading="lazy" class="poster-img" />}
+      {posterKicker && !poster && <span class="kicker label">{posterKicker}</span>}
       <span class="play" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"></path></svg>
       </span>
-      <span class="poster-title" aria-hidden="true">{title}</span>
+      {!poster && <span class="poster-title" aria-hidden="true">{title}</span>}
     </button>
   </div>
   <p class="watch"><a href={url} rel="noopener">Watch on YouTube <span aria-hidden="true">↗</span></a></p>
@@ -67,6 +72,28 @@ const { id, url, title, buttonLabel, posterKicker } = Astro.props;
       linear-gradient(160deg, #181513, var(--bg));
   }
 
+  .poster-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -1;
+  }
+
+  /* Light scrim so the play button stands out. */
+  .poster:has(.poster-img)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(to bottom, rgb(10 10 10 / 0.1), rgb(10 10 10 / 0.25));
+  }
+
+  .poster {
+    isolation: isolate;
+  }
+
   .poster:not([hidden]) {
     display: flex;
   }
@@ -86,7 +113,7 @@ const { id, url, title, buttonLabel, posterKicker } = Astro.props;
   }
 
   .play {
-    align-self: center;
+    margin: auto;
     display: grid;
     place-items: center;
     width: 3.75rem;
