@@ -62,10 +62,6 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     border-bottom: 0;
   }
 
-  :global(body.has-hero) nav a:not([aria-current='page']) {
-    color: var(--text);
-  }
-
   .brand {
     display: flex;
     align-items: center;
@@ -107,22 +103,32 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
   }
 
   nav a {
-    display: inline-block;
-    padding: 0.5rem 0;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 1.1rem;
     font-size: 0.9375rem;
-    color: var(--text-muted);
+    font-weight: 500;
+    color: var(--text);
     text-decoration: none;
+    background: rgb(10 10 10 / 0.85);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   nav a:hover,
+  nav a:focus-visible,
   nav a[aria-current='page'] {
-    color: var(--accent);
+    background: var(--accent);
+    color: #0a0a0a;
   }
 
-  nav a[aria-current='page'] {
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
-    text-underline-offset: 0.35em;
+  nav a:hover {
+    box-shadow: 0 0 1rem rgb(255 122 26 / 0.45);
   }
 
   .menu-toggle {
@@ -131,9 +137,9 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     gap: 0.6rem;
     min-height: 2.75rem; /* 44px touch target */
     padding: 0 0.9rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--accent);
     border-radius: 999px;
-    background: rgb(10 10 10 / 0.6);
+    background: rgb(10 10 10 / 0.85);
     color: var(--text);
     font: 500 0.875rem var(--font-mono);
     letter-spacing: 0.04em;
@@ -141,8 +147,10 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     cursor: pointer;
   }
 
-  .menu-toggle:hover {
-    border-color: var(--accent);
+  .menu-toggle:hover,
+  .menu-toggle[aria-expanded='true'] {
+    background: var(--accent);
+    color: #0a0a0a;
   }
 
   /* Two-line icon that turns into an X when open. */
@@ -202,18 +210,13 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
 
     .site-header.has-menu ul {
       flex-direction: column;
-      gap: 0;
+      gap: 0.6rem;
     }
 
     .site-header.has-menu nav a {
-      display: block;
-      padding: 0.8rem 0;
-      font-size: 1.125rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .site-header.has-menu li:last-child a {
-      border-bottom: 0;
+      display: flex;
+      min-height: 3rem;
+      font-size: 1.0625rem;
     }
   }
 
