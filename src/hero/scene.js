@@ -13,6 +13,7 @@ import { createWaterfront, createLampPosts } from './waterfront.js';
 import { createWater, createGround } from './water.js';
 import { createMountains, northShoreLightPoints, demHeightAt, terrainHeight } from './mountains.js';
 import { createLightPoints, aviationLights, distantLights } from './lights.js';
+import { createScienceDeck } from './sciencedeck.js';
 import { bcPlace, harbourCentre, scienceWorld, rogersArena } from './landmarks.js';
 import { createSeawall } from './seawall.js';
 import { createBridge } from './bridge.js';
@@ -223,7 +224,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.add(granville.group);
   addLights(granville.lights, 2);
 
-  let bcUpdate = null;
+  let bcUpdate = null, swUpdate = null, scienceDeck = null;
   if (L.bcPlace) {
     const bc = bcPlace(L.bcPlace, envMap);
     scene.add(bc.group);
@@ -238,7 +239,15 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   if (L.scienceWorld) {
     const sw = scienceWorld(L.scienceWorld, envMap);
     scene.add(sw.group);
-    addLights(sw.lights.map((p) => ({ p, color: [3.2, 3.4, 3.8], size: 0.45 })), 1);
+    addLights(sw.lights.map((l) => ({ p: l.p, hue: l.hue, color: [3.4, 3.4, 3.4], size: 0.5 })), 1);
+    swUpdate = sw.update;
+    // The walkway deck round the building (the mapped shoreline runs behind it, which left it standing in the water).
+    const [sx, sy] = L.scienceWorld.center;
+    const swRings = buildingList.filter((b) => b.ring.length >= 8 && Math.hypot(b.c[0] - sx, b.c[1] - sy) < 75).map((b) => b.ring);
+    const deck = createScienceDeck(L.scienceWorld, swRings, isWater, uniforms);
+    scene.add(deck.group);
+    addLights(deck.lamps, 1);
+    scienceDeck = deck;
   }
 
   if (L.rogersArena) {
@@ -279,13 +288,16 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   scene.add(islands.group);
 
   // Waterfront and parks: lawns, footpaths and bike paths with path lights, mapped trees.
-  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater, heightAt: groundAt, shoreDistance: createShoreDistance(data.shoreline) });
+  // Things the map puts over open water beside Science World's deck (paths, path lamps, people): off the deck, so dropped.
+  const offDeck = (x, y) => !!scienceDeck && isWater(x, y) && !scienceDeck.contains(x, y, -1.2) && scienceDeck.contains(x, y, 14);
+  const waterfront = createWaterfront(data, uniforms, { camera: CAMERA_POSITION, maxTrees: detail.maxTrees, lampDistance: detail.pathLampDistance, isWater, skipLamp: offDeck, heightAt: groundAt, shoreDistance: createShoreDistance(data.shoreline) });
   scene.add(waterfront.group);
   addLights(waterfront.lamps, 2);
 
   const bridgeStats = [];
   const animators = []; // (time) => void, run before every frame
   if (bcUpdate) animators.push(bcUpdate);
+  if (swUpdate) animators.push(swUpdate);
 
   // Street life: lamps along the downtown streets, traffic on the main roads.
   const streets = createStreets(data.roads, uniforms, { camera: CAMERA_POSITION, lampSpacing: detail.lampSpacing, carSpacing: detail.carSpacing, isWater, heightAt: groundAt });
@@ -300,7 +312,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     animators.push((time) => { streets.updateTraffic(sp.array, time); sp.needsUpdate = true; });
   }
   // South-bank street life: seawall railings and benches, parked cars, street trees, walkers and cyclists.
-  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList, detail: detail.southBank, heightAt: groundAt });
+  const southBank = createSouthBank(data, uniforms, { camera: CAMERA_POSITION, isWater, buildings: buildingList, detail: detail.southBank, heightAt: groundAt, skipPoint: offDeck });
   scene.add(southBank.group);
   animators.push(southBank.update);
   if (southBank.cyclistLights.length) {
@@ -382,7 +394,8 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
   }));
   for (let i = openBoats.length - 1; i >= 0; i--) if (bridgeDistance(openBoats[i].x, openBoats[i].y) < 45) openBoats.splice(i, 1);
-  const boats = createBoats([...data.boats, ...openBoats], data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
+  const clearOfDeck = (b) => !scienceDeck || !scienceDeck.contains(b.x, b.y, 12);
+  const boats = createBoats([...data.boats, ...openBoats].filter(clearOfDeck), data.docks, { camera: CAMERA_POSITION, minDistance: 220, maxDistance: detail.boatDistance, uniforms });
   scene.add(boats.group);
   addLights(boats.lights, 2);
   // Two Aquabus ferries crossing False Creek in the foreground: candidate crossings (bearing/distance

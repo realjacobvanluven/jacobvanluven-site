@@ -219,10 +219,25 @@ export function scienceWorld({ center, radius, top }, envMap) {
   const r = Math.max(radius, 17);
   const cy = top - r;
 
-  const dome = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(r, 3),
-    new THREE.MeshStandardMaterial({ color: 0xc8ced6, metalness: 0.85, roughness: 0.28, envMap, envMapIntensity: 1.3, flatShading: true }),
-  );
+  // The real dome is lit by LEDs that cycle through colours: the same slow colour wave as the lamp sprites, washed over the panels.
+  const domeTime = { value: 0 };
+  const domeMaterial = new THREE.MeshStandardMaterial({ color: 0xc8ced6, metalness: 0.85, roughness: 0.28, envMap, envMapIntensity: 1.3, flatShading: true });
+  domeMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uDomeTime = domeTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vDomeN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDomeN = normalize(position);');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vDomeN; uniform float uDomeTime;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        {
+          float ph = atan(vDomeN.x, vDomeN.z) / 6.2831853 * 0.3 + vDomeN.y * 0.15;
+          float h = fract(ph + uDomeTime * 0.045);
+          vec3 rgb = clamp(abs(fract(h + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+          totalEmissiveRadiance += rgb * 0.16 * smoothstep(-0.4, 0.5, vDomeN.y);
+        }`);
+  };
+  const dome = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 3), domeMaterial);
   dome.position.y = cy;
   group.add(dome);
 
@@ -244,9 +259,12 @@ export function scienceWorld({ center, radius, top }, envMap) {
     const key = `${p.getX(i).toFixed(2)},${p.getY(i).toFixed(2)},${p.getZ(i).toFixed(2)}`;
     if (seen.has(key) || p.getY(i) < -r * 0.45) continue;
     seen.add(key);
-    lights.push([center[0] + p.getX(i), cy + p.getY(i), -center[1] + p.getZ(i)]);
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    // Colour phase follows the same wave as the panel wash (see the dome shader above).
+    const hue = (((Math.atan2(x, z) / (2 * Math.PI)) * 0.3 + (y / r) * 0.15) % 1 + 1) % 1;
+    lights.push({ p: [center[0] + x, cy + y, -center[1] + z], hue });
   }
-  return { group, lights };
+  return { group, lights, update: (time) => { domeTime.value = time; } };
 }
 
 /** Procedural facade textures (browser only): lit curtain glass with mullions, and ribbed metal cladding. */

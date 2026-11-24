@@ -218,7 +218,7 @@ function createPeople(routes, { walkers, cyclists, camera, heightAt = () => 0 })
  * @param {{ camera: number[], isWater: Function, buildings: object[], detail: object }} opts
  *   detail: { furnitureDistance, parkedDistance, maxParked, streetTrees, walkers, cyclists }
  */
-export function createSouthBank(data, uniforms, { camera, isWater, buildings, detail, heightAt = () => 0 }) {
+export function createSouthBank(data, uniforms, { camera, isWater, buildings, detail, heightAt = () => 0, skipPoint = () => false }) {
   const group = new THREE.Group();
   group.name = 'south-bank';
   const rand = rng(88);
@@ -308,7 +308,7 @@ export function createSouthBank(data, uniforms, { camera, isWater, buildings, de
   // Routes for walkers and cyclists: the seawall (offset inland from the shoreline) and the mapped footpaths.
   const routes = [];
   const addRoute = (line, y) => {
-    const pts = line.filter(([x, y]) => dist(x, y) < detail.peopleDistance);
+    const pts = line.filter(([x, y]) => dist(x, y) < detail.peopleDistance && !skipPoint(x, y));
     if (pts.length < 2) return;
     const cum = cumulative(pts);
     if (cum[cum.length - 1] > 30) routes.push({ line: pts, cum, length: cum[cum.length - 1], y, near: Math.min(...pts.map(([x, y]) => dist(x, y))) });

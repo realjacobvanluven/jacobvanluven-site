@@ -7,15 +7,16 @@ import * as THREE from 'three';
  */
 export function createLightPoints(lights, uniforms, { minPixels = 1.6 } = {}) {
   const n = lights.length;
-  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), size = new Float32Array(n), blink = new Float32Array(n);
+  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), size = new Float32Array(n), blink = new Float32Array(n), hue = new Float32Array(n);
   lights.forEach((l, i) => {
-    pos.set(l.p, i * 3); col.set(l.color, i * 3); size[i] = l.size; blink[i] = l.blink ?? -1;
+    pos.set(l.p, i * 3); col.set(l.color, i * 3); size[i] = l.size; blink[i] = l.blink ?? -1; hue[i] = l.hue ?? -1;
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
   g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
   g.setAttribute('aBlink', new THREE.BufferAttribute(blink, 1));
+  g.setAttribute('aHue', new THREE.BufferAttribute(hue, 1));
   const m = new THREE.ShaderMaterial({
     uniforms: { ...uniforms, uMinPixels: { value: minPixels } },
     transparent: true,
@@ -30,6 +31,7 @@ export function createLightPoints(lights, uniforms, { minPixels = 1.6 } = {}) {
       attribute vec3 aColor;
       attribute float aSize;
       attribute float aBlink;        // phase for blinking lights, -1 = steady
+      attribute float aHue;          // colour-cycling lights (Science World): starting phase 0..1, -1 = fixed colour
       varying vec3 vColor;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -40,7 +42,14 @@ export function createLightPoints(lights, uniforms, { minPixels = 1.6 } = {}) {
         float energy = (px * px) / (shown * shown);
         float fog = exp(-dist * uFogDensity * 1.2);
         float on = aBlink < 0.0 ? 1.0 : step(0.5, fract(uTime * 0.5 + aBlink));
-        vColor = aColor * mix(0.35, 1.0, sqrt(energy)) * fog * on;
+        vec3 base = aColor;
+        if (aHue >= 0.0) {
+          // Slowly cycling saturated colour; the phase differs per lamp so colour ripples across the dome.
+          float h = fract(aHue + uTime * 0.045);
+          vec3 rgb = clamp(abs(fract(h + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+          base = mix(vec3(1.0), rgb, 0.92) * max(aColor.r, max(aColor.g, aColor.b));
+        }
+        vColor = base * mix(0.35, 1.0, sqrt(energy)) * fog * on;
         gl_PointSize = shown * 3.0; // the glow extends past the lamp itself
         gl_Position = projectionMatrix * mv;
       }

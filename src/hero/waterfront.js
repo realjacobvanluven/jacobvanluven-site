@@ -70,7 +70,7 @@ function createGreens(greens, uniforms, heightAt = () => 0) {
 }
 
 /** Footpaths (light pavers) and bike paths (asphalt, dashed centre line), with path lights. */
-function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, heightAt = () => 0, shoreDistance = () => Infinity, roads = [] }) {
+function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWater = () => false, skipLamp = () => false, heightAt = () => 0, shoreDistance = () => Infinity, roads = [] }) {
   const pos = [], arc = [], across = [], half = [], cyc = [], free = [];
   const lamps = [];
   // A path end that joins nothing (no other path or street within a few metres, not on the seawall) is a dead end in the map
@@ -135,7 +135,7 @@ function createPaths(paths, uniforms, { camera, lampDistance, lampSpacing, isWat
         for (let s = first; s < cum + seg; s += lampSpacing) {
           const t = (s - cum) / seg, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
           const d = Math.hypot(x - camera[0], y - camera[1]);
-          if (d < lampDistance && d > 120) lamps.push({ p: [x + nx * 2, 3.5 + heightAt(x, y), -(y + ny * 2)], color: [3.2, 2.2, 1.2], size: 0.45 });
+          if (d < lampDistance && d > 120 && !skipLamp(x + nx * 2, y + ny * 2)) lamps.push({ p: [x + nx * 2, 3.5 + heightAt(x, y), -(y + ny * 2)], color: [3.2, 2.2, 1.2], size: 0.45 });
         }
       }
       cum += seg;
@@ -339,10 +339,10 @@ export function createLampPosts(lamps, { height, near = () => true } = {}) {
   return mesh;
 }
 
-export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater, heightAt = () => 0, shoreDistance } = {}) {
+export function createWaterfront(data, uniforms, { camera = [0, 0], maxTrees = 4000, lampDistance = 1600, lampSpacing = PATH_LAMP_SPACING, isWater, skipLamp, heightAt = () => 0, shoreDistance } = {}) {
   const group = new THREE.Group();
   group.add(createGreens(data.greens, uniforms, heightAt));
-  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, heightAt, shoreDistance, roads: data.roads });
+  const paths = createPaths(data.paths, uniforms, { camera, lampDistance, lampSpacing, isWater, skipLamp, heightAt, shoreDistance, roads: data.roads });
   group.add(paths.mesh);
   group.add(createLampPosts(paths.lamps, { height: 3.5, near: (x, y) => Math.hypot(x - camera[0], y - camera[1]) < 800 }));
   const trees = createTrees(data.trees, uniforms, { max: maxTrees, heightAt });
