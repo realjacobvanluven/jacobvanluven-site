@@ -4,6 +4,9 @@ date: "2024-05-30"
 section: "journalism"
 format: "written"
 series: "JRNL 4900 deadline stories"
+course: "JRNL 4900"
+# TODO(Jacob): outlet (the other JRNL 4900 deadline stories ran on Substack, communitynews4900; not confirmed for this one),
+# a short description, and the link to the full story. None are in the repo or the Wix text.
 wixPage: "/recent-work"
 ---
 

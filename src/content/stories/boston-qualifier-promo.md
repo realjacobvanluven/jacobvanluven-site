@@ -3,7 +3,7 @@ title: "Fair or unfair: the first year of New York's Boston-style qualifying sta
 section: "journalism"
 format: "social"
 description: "Social promo for a classmate's story on New York's Boston-style marathon qualifying standard."
-# Left uncredited at Jacob's request (a classmate's story). TODO(Jacob): date.
+# Left uncredited at Jacob's request (a classmate's story). TODO(Jacob): date, course or outlet, and reporter name (CLAUDE.md says promos credit the reporter; confirm whether to credit).
 media:
   - type: image
     src: ../../assets/journalism/social/boston-qualifier.png

@@ -49,6 +49,8 @@ const stories = defineCollection({
       description: z.string().optional(),
       /** Groups multi-part projects, e.g. "Tricky Transit". */
       series: z.string().optional(),
+      /** Course code the piece was made for, e.g. "JRNL 4900". Plain-English notes live in src/data/journalism.ts. */
+      course: z.string().optional(),
       outlet: z.string().optional(),
       /** Where the piece lives if it is hosted elsewhere (Medium, LangaraVoice, Substack, ...). */
       externalUrl: z.url().optional(),

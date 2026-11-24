@@ -4,7 +4,8 @@ section: "journalism"
 format: "social"
 description: "Story-promo graphic for reporter Andrew Yen's visit to a Steveston shop specializing in vintage Mini Coopers."
 credit: "Story by reporter Andrew Yen · Promo graphic by Jacob Van Luven"
-outlet: "Community News (JRNL 4900, Substack)"
+course: "JRNL 4900"
+outlet: "Community News (Substack)"
 # TODO(Jacob): date.
 media:
   - type: image

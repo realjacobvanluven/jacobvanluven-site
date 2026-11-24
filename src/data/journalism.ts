@@ -5,6 +5,14 @@
  */
 export type WorkType = { id: string; label: string; description: string; featured: string[] };
 
+/**
+ * Plain-English notes for course codes shown on story cards. Only add a note the repo supports.
+ * TODO(Jacob): JRNL 3180, JRNL 2240 and CMNS 3100 need a short plain-English description (course names are not in the repo).
+ */
+export const courseNotes: Record<string, string> = {
+  'JRNL 4900': 'deadline reporting course',
+};
+
 export const workTypes: WorkType[] = [
   {
     id: 'deadline-news',

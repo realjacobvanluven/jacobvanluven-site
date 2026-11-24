@@ -1,6 +1,8 @@
 ---
 title: "A city in stride: the rise of run clubs in Vancouver"
 # TODO(Jacob) date: the Wix page gives no publish date (text refers to 2025).
+course: "JRNL 3180"
+# Course from the Wix page title "JRNL 3180 Final Story". TODO(Jacob): outlet/link, if it ran anywhere.
 section: "journalism"
 format: "written"
 wixPage: "/jrnl-3180-final-story"

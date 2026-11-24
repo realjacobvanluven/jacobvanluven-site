@@ -4,8 +4,9 @@ section: "journalism"
 format: "video"
 description: "Vertical promo reel for reporter Suneet Gill's story on the festival held near False Creek."
 credit: "Story by reporter Suneet Gill · Social video promo by Jacob Van Luven"
-outlet: "Community News (JRNL 4900, Substack)"
-# TODO(Jacob): date.
+course: "JRNL 4900"
+outlet: "Community News (Substack)"
+# TODO(Jacob): date, and the link to Suneet Gill's full story on the Community News Substack (no URL in the repo).
 media:
   - type: video
     src: /media/journalism/video/fire-festival.mp4

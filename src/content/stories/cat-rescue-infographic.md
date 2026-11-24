@@ -2,6 +2,7 @@
 title: "The 9-Lives Cat Rescue Society"
 section: "journalism"
 format: "dataviz"
+course: "CMNS 3100"
 description: "Infographic made for CMNS 3100 on helping a Nova Scotia charity control the feral cat population through trap-neuter-release."
 # TODO(Jacob): date.
 media:

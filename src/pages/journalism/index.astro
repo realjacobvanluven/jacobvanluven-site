@@ -22,6 +22,10 @@ const sections = workTypes.map((type) => ({
   description="The kinds of journalism Jacob Van Luven has done, from deadline news and features to audio, video, data visualization and social, with a featured example of each."
 >
   <h1>Journalism</h1>
+  <p class="intro">
+    Most of this work was produced while I studied Journalism and Communications at KPU and journalism at Langara. Each
+    piece notes the course or outlet it was made for.
+  </p>
   <nav class="jump" aria-label="Types of work">
     <ul>
       {sections.map((s) => <li><a href={`#${s.id}`}>{s.label}</a></li>)}
@@ -44,6 +48,13 @@ const sections = workTypes.map((type) => ({
 </BaseLayout>
 
 <style>
+  .intro {
+    max-width: 40rem;
+    margin: 0 0 1.5rem;
+    color: var(--text-muted);
+    font-size: 1.0625rem;
+  }
+
   .jump ul {
     display: flex;
     flex-wrap: wrap;

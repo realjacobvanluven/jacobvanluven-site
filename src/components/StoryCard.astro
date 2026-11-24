@@ -1,6 +1,7 @@
 ---
 import MediaItem from './MediaItem.astro';
 import { formatStoryDate } from '../lib/format';
+import { courseNotes } from '../data/journalism';
 import { hasBody, storyHref, type Story } from '../lib/stories';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 const { story, headingLevel: H = 'h3' } = Astro.props;
 const { data } = story;
 const href = storyHref(story);
+const course = data.course ? (courseNotes[data.course] ? `${data.course}: ${courseNotes[data.course]}` : data.course) : undefined;
 const external = !hasBody(story) && Boolean(data.externalUrl);
 ---
 
@@ -26,13 +28,13 @@ const external = !hasBody(story) && Boolean(data.externalUrl);
   }
   <div class="card-text">
     {
-      (data.date || data.outlet) && (
+      (course || data.outlet || data.date) && (
         <p class="label">
+          {[course, data.outlet].filter(Boolean).join(' · ')}
+          {(course || data.outlet) && data.date && ' · '}
           {data.date && (
             <time datetime={data.date.toISOString().slice(0, 10)}>{formatStoryDate(data.date, data.datePrecision)}</time>
           )}
-          {data.date && data.outlet && ' · '}
-          {data.outlet}
         </p>
       )
     }
