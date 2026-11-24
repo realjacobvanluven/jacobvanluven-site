@@ -93,7 +93,6 @@ const stops = await heroStops();
       }
     </ol>
 
-    <button class="tilt" type="button" data-tilt hidden>Tilt to look around</button>
   </div>
 </section>
 
@@ -442,26 +441,6 @@ const stops = await heroStops();
     cursor: grabbing;
   }
 
-  .tilt {
-    position: absolute;
-    left: var(--gutter);
-    top: 5rem;
-    min-height: 2.75rem;
-    padding: 0 0.9rem;
-    border: 1px solid rgb(255 255 255 / 0.3);
-    border-radius: 999px;
-    background: rgb(10 10 10 / 0.5);
-    color: var(--text-muted);
-    font: 500 0.75rem var(--font-mono);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-
-  .tilt[hidden] {
-    display: none;
-  }
-
   /* Phones and narrow screens: a 2 × 2 grid over the calm water at the bottom, names only. */
   @media (max-width: 48rem), (orientation: portrait) {
     :global(html.hero-motion) .cards {
@@ -593,7 +572,6 @@ const stops = await heroStops();
   async function start(root: HTMLElement, tour: ReturnType<typeof setUpTour>) {
     const stage = root.querySelector<HTMLElement>('[data-stage]')!;
     const canvas = root.querySelector<HTMLCanvasElement>('[data-canvas]')!;
-    const tiltButton = root.querySelector<HTMLButtonElement>('[data-tilt]')!;
     const coarse = window.matchMedia('(pointer: coarse)').matches;
     const isPhone = coarse && Math.min(screen.width, screen.height) < 820;
 
@@ -613,17 +591,8 @@ const stops = await heroStops();
     };
     const DOE = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> } | undefined;
     if (coarse && DOE) {
-      if (typeof DOE.requestPermission === 'function') {
-        tiltButton.hidden = false; // iOS: permission must come from a tap; if declined, the view stays still
-        tiltButton.addEventListener('click', async () => {
-          tiltButton.hidden = true;
-          try {
-            if ((await DOE.requestPermission!()) === 'granted') window.addEventListener('deviceorientation', onTilt);
-          } catch { /* no tilt */ }
-        }, { once: true });
-      } else {
-        window.addEventListener('deviceorientation', onTilt);
-      }
+      // iOS needs a tap to grant motion access; with no button, only browsers that allow it directly get tilt.
+      if (typeof DOE.requestPermission !== 'function') window.addEventListener('deviceorientation', onTilt);
     }
 
     type View = { bearing: number; pitch: number; fov: number };
