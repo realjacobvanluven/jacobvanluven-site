@@ -10,7 +10,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "data:skyline": "node scripts/build-skyline-data.mjs"
+    "data:skyline": "node scripts/build-skyline-data.mjs",
+    "data:preparedness": "node scripts/build-preparedness-snapshot.mjs",
+    "test": "node --test \"scripts/test/*.test.mjs\""
   },
   "dependencies": {
     "@astrojs/mdx": "^8.1.6",
