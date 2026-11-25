@@ -290,6 +290,13 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
         cooperativeGestures: true,
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      // A basemap that can't load (service down, offline) would leave a blank box: say so instead.
+      map.on('error', () => {
+        if (map && !map.isStyleLoaded()) {
+          $('[data-maperr]').hidden = false;
+          $('[data-map]').hidden = true;
+        }
+      });
       map.on('load', () => {
         map!.addSource('alerts', { type: 'geojson', data: toGeoJson() as never });
         map!.addLayer({ id: 'a-fill', type: 'fill', source: 'alerts', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['get', 'colour'], 'fill-opacity': 0.25 } });
