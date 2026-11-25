@@ -1,0 +1,305 @@
+---
+import { CREDITS, HAZARD_LABELS, HAZARD_ORDER, OFFICIAL_LINKS } from '../../lib/preparedness/index.ts';
+
+const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
+---
+
+<div class="pb" data-pb>
+  <p class="banner" data-banner role="status" hidden></p>
+
+  <dl class="strip" data-strip aria-label="Active items by type">
+    {
+      hazards.map((h) => (
+        <div>
+          <dt>{h.label}</dt>
+          <dd data-count={h.id}>–</dd>
+        </div>
+      ))
+    }
+  </dl>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="Filter by type">
+      {
+        hazards.map((h) => (
+          <button type="button" class="chip" data-hazard={h.id} aria-pressed="true">
+            {h.label}
+          </button>
+        ))
+      }
+    </div>
+    <button type="button" class="mapbtn" data-mapbtn aria-expanded="false" aria-controls="pb-map">Show map</button>
+  </div>
+
+  <div class="map-wrap" data-mapwrap hidden>
+    <div id="pb-map" class="map" data-map role="region" aria-label="Map of active items. The list below has the same information."></div>
+    <p class="maperr" data-maperr hidden>The map could not load. The list below has everything the map would show.</p>
+  </div>
+
+  <p class="loading" data-loading>Loading the latest data…</p>
+  <ol class="feed" data-feed aria-live="polite"></ol>
+
+  <details class="sources">
+    <summary>Data sources and freshness</summary>
+    <ul data-sources></ul>
+  </details>
+
+  <section class="official" aria-labelledby="pb-official">
+    <h2 id="pb-official">Official sources</h2>
+    <p>Always check these for decisions about your safety.</p>
+    <ul>
+      {OFFICIAL_LINKS.map((l) => <li><a href={l.url} rel="noopener">{l.label}</a></li>)}
+    </ul>
+  </section>
+
+  <p class="credits">
+    {CREDITS.oglBc}{' '}{CREDITS.eccc}{' '}Map data © OpenStreetMap contributors, tiles by OpenFreeMap. This is not an official
+    service and is not endorsed by the Province of British Columbia or Environment and Climate Change Canada.
+  </p>
+</div>
+
+<style>
+  .pb { display: grid; gap: 1.25rem; margin-top: 2rem; }
+
+  .banner {
+    margin: 0; padding: 0.75rem 1rem; max-width: none;
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; font-size: 0.9375rem;
+  }
+
+  .strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.5rem; margin: 0; }
+  .strip div { padding: 0.65rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  dt { font: 500 0.6875rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+  dd { margin: 0.15rem 0 0; font: 600 1.5rem var(--font-display); }
+  @media (max-width: 40rem) { .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; align-items: center; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+  button {
+    min-height: 2.75rem; padding: 0 1rem; background: transparent; color: var(--text);
+    border: 1px solid var(--border); border-radius: 999px; cursor: pointer;
+    font: 500 0.8125rem var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  .chip[aria-pressed='true'] { border-color: var(--accent); background: rgb(255 122 26 / 0.14); color: var(--accent-soft); }
+  .chip[aria-pressed='false'] { color: var(--text-muted); text-decoration: line-through; }
+
+  .map { height: min(60vh, 32rem); min-height: 18rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .maperr, .loading { margin: 0; color: var(--text-muted); max-width: none; }
+
+  .feed { display: grid; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+  .feed :global(li) { max-width: none; }
+  .feed :global(.card) {
+    padding: 0.8rem 1rem; background: var(--surface); border: 1px solid var(--border);
+    border-left: 4px solid var(--border); border-radius: 8px;
+  }
+  .feed :global(.card[data-sev='critical']) { border-left-color: #ff4d4d; }
+  .feed :global(.card[data-sev='high']) { border-left-color: var(--accent); }
+  .feed :global(.card[data-sev='moderate']) { border-left-color: #e8c547; }
+  .feed :global(.card[data-sev='low']) { border-left-color: #6aa7ff; }
+  .feed :global(.tag) { display: block; font: 500 0.6875rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-soft); }
+  .feed :global(.title) { margin: 0.15rem 0 0; font: 600 1.0625rem var(--font-display); }
+  .feed :global(.sum), .feed :global(.meta) { margin: 0.25rem 0 0; font-size: 0.9375rem; color: var(--text-muted); max-width: none; }
+  .feed :global(.old) { color: var(--accent); }
+  .feed :global(details) { margin-top: 0.5rem; }
+  .feed :global(summary) { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; color: var(--accent); }
+  .feed :global(.official-text) { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9375rem; margin: 0 0 0.5rem; max-width: none; }
+  .feed :global(.empty) { color: var(--text-muted); }
+
+  .sources { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; }
+  .sources summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; }
+  .sources ul { padding: 0 0 0.75rem 1.1rem; margin: 0; }
+  .official h2 { margin-top: 0.5rem; }
+  .credits { font-size: 0.8125rem; color: var(--text-muted); max-width: none; margin: 0; }
+</style>
+
+<script>
+  import { loadBoard, HAZARD_LABELS } from '../../lib/preparedness/index.ts';
+  import type { Alert, Board, HazardId } from '../../lib/preparedness/index.ts';
+
+  const root = document.querySelector<HTMLElement>('[data-pb]')!;
+  const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+  const feed = $('[data-feed]');
+  const banner = $('[data-banner]');
+  const mapBtn = $<HTMLButtonElement>('[data-mapbtn]');
+  const mapWrap = $('[data-mapwrap]');
+
+  const active = new Set<HazardId>(Object.keys(HAZARD_LABELS) as HazardId[]);
+  let board: Board | null = null;
+  let map: import('maplibre-gl').Map | null = null;
+
+  const SEV_COLOUR: Record<string, string> = { critical: '#ff4d4d', high: '#ff7a1a', moderate: '#e8c547', low: '#6aa7ff', info: '#a9a29a' };
+  const SEV_LABEL: Record<string, string> = { critical: 'Critical', high: 'High', moderate: 'Moderate', low: 'Low', info: 'Info' };
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function ago(ms: number | null) {
+    if (ms === null) return 'never';
+    const m = Math.round(ms / 60000);
+    if (m < 2) return 'just now';
+    if (m < 90) return `${m} min ago`;
+    const h = Math.round(m / 60);
+    return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+  }
+
+  function when(iso: string | null) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(+d) ? '' : d.toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function card(a: Alert) {
+    const li = el('li');
+    const c = el('article', 'card');
+    c.dataset.sev = a.severity;
+    c.append(el('span', 'tag', `${HAZARD_LABELS[a.hazard]} · ${SEV_LABEL[a.severity]} · ${a.sourceLevel}`));
+    c.append(el('h3', 'title', a.title));
+    if (a.summary) c.append(el('p', 'sum', a.summary));
+    const bits = [a.area, a.updatedAt ? `Updated ${when(a.updatedAt)}` : a.issuedAt ? `Issued ${when(a.issuedAt)}` : ''].filter(Boolean);
+    if (bits.length) c.append(el('p', 'meta', bits.join(' · ')));
+    if (a.looksOld) c.append(el('p', 'meta old', 'This record has not been updated in over a year and may be out of date.'));
+    if (a.officialText) {
+      const d = el('details');
+      d.append(el('summary', undefined, 'Official text'));
+      d.append(el('p', 'official-text', a.officialText));
+      c.append(d);
+    }
+    const link = el('a', undefined, 'Official source');
+    link.href = a.url;
+    link.rel = 'noopener';
+    c.append(link);
+    li.append(c);
+    return li;
+  }
+
+  function visible() {
+    return board ? board.alerts.filter((a) => active.has(a.hazard)) : [];
+  }
+
+  function renderFeed() {
+    feed.replaceChildren();
+    const list = visible();
+    if (!list.length && board) {
+      const li = el('li', 'empty', board.status === 'unavailable' ? 'No data could be loaded.' : 'Nothing active for the selected types.');
+      feed.append(li);
+    }
+    // Long lists: render the first 60, reveal the rest on request (keeps the page light on mobile).
+    const shown = list.slice(0, 60);
+    for (const a of shown) feed.append(card(a));
+    if (list.length > shown.length) {
+      const li = el('li');
+      const b = el('button', undefined, `Show ${list.length - shown.length} more`);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        li.remove();
+        for (const a of list.slice(60)) feed.append(card(a));
+      });
+      li.append(b);
+      feed.append(li);
+    }
+    updateMap();
+  }
+
+  function renderBoard(b: Board) {
+    board = b;
+    $('[data-loading]').hidden = true;
+    for (const h of Object.keys(HAZARD_LABELS) as HazardId[]) $(`[data-count="${h}"]`).textContent = String(b.counts[h] ?? 0);
+
+    const notes: string[] = [];
+    if (b.status === 'unavailable') notes.push('No data sources could be reached right now. Please use the official sources below.');
+    else if (b.status === 'snapshot') notes.push('Live sources could not be reached. Showing a saved copy.');
+    else if (b.status === 'partial') notes.push('Some sources could not be reached; those show a saved copy where one exists.');
+    for (const s of b.sources) if (s.origin === 'snapshot' && s.stale) notes.push(`${s.label}: saved copy is ${ago(s.ageMs)} and may be out of date.`);
+    banner.hidden = notes.length === 0;
+    banner.textContent = notes.join(' ');
+
+    const ul = $('[data-sources]');
+    ul.replaceChildren();
+    for (const s of b.sources) {
+      const state = s.origin === 'live' ? 'live' : s.origin === 'snapshot' ? `saved copy from ${ago(s.ageMs)}` : 'unavailable';
+      ul.append(el('li', undefined, `${s.label}: ${state}, ${s.alertCount} item${s.alertCount === 1 ? '' : 's'}`));
+    }
+    renderFeed();
+  }
+
+  // ---- Map (MapLibre is loaded only when the person opens it) ----
+  function toGeoJson() {
+    const features = visible()
+      .filter((a) => a.geometry)
+      .map((a) => ({
+        type: 'Feature' as const,
+        geometry: a.geometry as never,
+        properties: { id: a.id, title: a.title, sev: a.severity, colour: SEV_COLOUR[a.severity], hazard: HAZARD_LABELS[a.hazard], level: a.sourceLevel },
+      }));
+    return { type: 'FeatureCollection' as const, features };
+  }
+
+  function updateMap() {
+    const src = map?.getSource('alerts') as import('maplibre-gl').GeoJSONSource | undefined;
+    src?.setData(toGeoJson() as never);
+  }
+
+  async function openMap() {
+    mapWrap.hidden = false;
+    if (map) return;
+    try {
+      const [{ default: maplibregl }] = await Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl.css')]);
+      map = new maplibregl.Map({
+        container: $('[data-map]'),
+        style: 'https://tiles.openfreemap.org/styles/dark',
+        bounds: [[-139.1, 48.2], [-114.0, 60.0]],
+        fitBoundsOptions: { padding: 20 },
+        cooperativeGestures: true,
+      });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      map.on('load', () => {
+        map!.addSource('alerts', { type: 'geojson', data: toGeoJson() as never });
+        map!.addLayer({ id: 'a-fill', type: 'fill', source: 'alerts', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['get', 'colour'], 'fill-opacity': 0.25 } });
+        map!.addLayer({ id: 'a-line', type: 'line', source: 'alerts', filter: ['!=', ['geometry-type'], 'Point'], paint: { 'line-color': ['get', 'colour'], 'line-width': 1.5 } });
+        map!.addLayer({ id: 'a-pt', type: 'circle', source: 'alerts', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': ['get', 'colour'], 'circle-radius': 5, 'circle-stroke-color': '#0a0a0a', 'circle-stroke-width': 1 } });
+        for (const id of ['a-fill', 'a-pt']) {
+          map!.on('click', id, (e) => {
+            const p = e.features?.[0]?.properties;
+            if (!p) return;
+            const box = el('div');
+            box.style.color = '#0a0a0a';
+            box.append(el('strong', undefined, String(p.title)), el('br'), document.createTextNode(`${p.hazard} · ${p.level}`));
+            new maplibregl.Popup().setLngLat(e.lngLat).setDOMContent(box).addTo(map!);
+          });
+        }
+      });
+    } catch {
+      $('[data-maperr]').hidden = false;
+      $('[data-map]').hidden = true;
+    }
+  }
+
+  mapBtn.addEventListener('click', () => {
+    const open = mapBtn.getAttribute('aria-expanded') === 'true';
+    mapBtn.setAttribute('aria-expanded', String(!open));
+    mapBtn.textContent = open ? 'Show map' : 'Hide map';
+    if (open) mapWrap.hidden = true;
+    else void openMap();
+  });
+
+  for (const chip of root.querySelectorAll<HTMLButtonElement>('.chip')) {
+    chip.addEventListener('click', () => {
+      const h = chip.dataset.hazard as HazardId;
+      const on = chip.getAttribute('aria-pressed') !== 'true';
+      chip.setAttribute('aria-pressed', String(on));
+      on ? active.add(h) : active.delete(h);
+      renderFeed();
+    });
+  }
+
+  loadBoard()
+    .then(renderBoard)
+    .catch(() => {
+      $('[data-loading]').textContent = 'The board could not load. Please use the official sources below.';
+    });
+</script>

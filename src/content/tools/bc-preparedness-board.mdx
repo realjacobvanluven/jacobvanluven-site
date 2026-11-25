@@ -1,0 +1,15 @@
+---
+title: BC Preparedness Board
+description: A live view of wildfires, evacuation orders, weather alerts, air quality and road incidents across British Columbia, pulled from official open data. Not an official alert service.
+status: beta
+order: 2
+draft: false
+---
+
+import PreparednessBoard from '../../components/tools/PreparednessBoard.astro';
+
+This board pulls the public BC and Environment Canada data feeds into one place, sorted with the most serious items first. It checks the sources each time you open it, and falls back to a saved copy (shown with its age) if a source is down.
+
+**It is a portfolio project, not an emergency service.** For decisions about your safety, use the official sources linked at the bottom of the page.
+
+<PreparednessBoard />
