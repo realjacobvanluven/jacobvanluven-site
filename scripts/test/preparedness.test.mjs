@@ -332,3 +332,14 @@ test('snapshot: the change key ignores timestamps', async () => {
   assert.equal(contentKey(a.snapshot), contentKey(b.snapshot));
   assert.notEqual(contentKey(a.snapshot), contentKey(null));
 });
+
+import { GUIDANCE } from '../../src/lib/preparedness/guidance.ts';
+import { HAZARD_ORDER as ORDER } from '../../src/lib/preparedness/constants.ts';
+
+test('every hazard has a guidance card, and cards without points still link somewhere official', () => {
+  for (const h of ORDER) {
+    const g = GUIDANCE.find((x) => x.hazard === h);
+    assert.ok(g, `missing guidance for ${h}`);
+    assert.ok(g.links.length > 0, `no official link for ${h}`);
+  }
+});

@@ -1,5 +1,8 @@
 ---
 import { CREDITS, HAZARD_LABELS, HAZARD_ORDER, OFFICIAL_LINKS } from '../../lib/preparedness/index.ts';
+import { GUIDANCE, GENERAL_GUIDANCE } from '../../lib/preparedness/guidance.ts';
+
+const guidance = HAZARD_ORDER.map((h) => GUIDANCE.find((g) => g.hazard === h)!);
 
 const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
 ---
@@ -43,6 +46,32 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     <summary>Data sources and freshness</summary>
     <ul data-sources></ul>
   </details>
+
+  <section class="guide" aria-labelledby="pb-guide">
+    <h2 id="pb-guide">What this means, and what to do</h2>
+    <p>
+      Plain-language notes from the emergency-preparedness campaigns I wrote for the Emergency Planning Secretariat in 2024. See
+      them as designed on <a href="/comms/">my Comms page</a>. They are general guidance, not instructions for your situation.
+    </p>
+    {
+      guidance.map((g) => (
+        <details>
+          <summary>{g.heading}</summary>
+          {g.points.length > 0 && <ul>{g.points.map((p) => <li>{p}</li>)}</ul>}
+          {g.points.length === 0 && <p>See the official guidance below.</p>}
+          <p class="glinks">
+            {g.campaignId && <><a href={`/comms/#${g.campaignId}-h`}>My campaign on this</a>{' · '}</>}
+            {g.links.map((l, i) => <>{i > 0 && ' · '}<a href={l.url} rel="noopener">{l.label}</a></>)}
+          </p>
+        </details>
+      ))
+    }
+    <details>
+      <summary>{GENERAL_GUIDANCE.heading}</summary>
+      <ul>{GENERAL_GUIDANCE.points.map((p) => <li>{p}</li>)}</ul>
+      <p class="glinks"><a href={`/comms/#${GENERAL_GUIDANCE.campaignId}-h`}>My go-bag campaign</a></p>
+    </details>
+  </section>
 
   <section class="official" aria-labelledby="pb-official">
     <h2 id="pb-official">Official sources</h2>
@@ -109,7 +138,11 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   .sources { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; }
   .sources summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; }
   .sources ul { padding: 0 0 0.75rem 1.1rem; margin: 0; }
-  .official h2 { margin-top: 0.5rem; }
+  .official h2, .guide h2 { margin-top: 0.5rem; }
+  .guide details { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; margin-top: 0.5rem; }
+  .guide summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; font-weight: 600; }
+  .guide ul { margin: 0 0 0.5rem; padding-left: 1.1rem; }
+  .glinks { margin: 0 0 0.75rem; font-size: 0.9375rem; }
   .credits { font-size: 0.8125rem; color: var(--text-muted); max-width: none; margin: 0; }
 </style>
 
