@@ -201,6 +201,9 @@ export function normalizeAqhi(json: unknown): SourceResult {
     const p = isObj(f.properties) ? f.properties : {};
     const value = num(p.aqhi);
     if (value === null) continue;
+    // The request box also covers Alberta. The feed has no province field, but station ids start with a
+    // province letter: BC stations are J..., Alberta's are I... (checked 2026-11-25).
+    if (!str(p.location_id).startsWith('J')) continue;
     const name = str(p.location_name_en) || str(p.location_id) || 'Station';
     const category = aqhiCategory(value);
     const observedAt = toIso(p.observation_datetime);

@@ -60,8 +60,9 @@ export const eccc = {
 export const aqhi = {
   features: [
     { geometry: { type: 'Point', coordinates: [-123.4, 48.4] }, properties: { location_id: 'JCLMX', location_name_en: 'WestShore', aqhi: 1, observation_datetime: '2026-11-24T20:00:00Z', special_notes_en: '' } },
-    { geometry: { type: 'Point', coordinates: [-122, 49] }, properties: { location_id: 'AAA', location_name_en: 'Mid Station', aqhi: 4.62, observation_datetime: '2026-11-24T20:00:00Z' } },
-    { geometry: { type: 'Point', coordinates: [-121, 50] }, properties: { location_id: 'BBB', location_name_en: 'Smoky Station', aqhi: 8, observation_datetime: '2026-11-24T20:00:00Z', special_notes_en: 'Wildfire smoke' } },
+    { geometry: { type: 'Point', coordinates: [-122, 49] }, properties: { location_id: 'JAAAA', location_name_en: 'Mid Station', aqhi: 4.62, observation_datetime: '2026-11-24T20:00:00Z' } },
+    { geometry: { type: 'Point', coordinates: [-121, 50] }, properties: { location_id: 'JBBBB', location_name_en: 'Smoky Station', aqhi: 8, observation_datetime: '2026-11-24T20:00:00Z', special_notes_en: 'Wildfire smoke' } },
+    { geometry: { type: 'Point', coordinates: [-114.06, 51.05] }, properties: { location_id: 'IAKID', location_name_en: 'Calgary (Alberta, must be dropped)', aqhi: 8, observation_datetime: '2026-11-24T20:00:00Z' } },
     { geometry: null, properties: { location_id: 'CCC', location_name_en: 'No Data', aqhi: null } },
   ],
 };
