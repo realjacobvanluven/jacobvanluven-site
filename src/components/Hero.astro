@@ -4,8 +4,8 @@
  *
  * Progressive enhancement:
  *  - Always: a pre-rendered poster (the LCP image) + the headline + "Skip to work". Works without JS.
- *  - With motion allowed: one scroll (or Tab, or "Skip to work") swaps the headline for all four section
- *    cards at once, each tied to a landmark (BC Place → Experience, etc.).
+ *  - With motion allowed: one scroll (or Tab, or "Skip to work") swaps the headline for all three section
+ *    cards at once, each tied to a landmark (Harbour Centre → About, etc.).
  *  - With JS + WebGL: the live 3D scene (src/hero/, loaded lazily) fades in over the poster. Hovering or
  *    focusing a card turns the camera to its landmark; the cursor (desktop) or device tilt (phones) adds a
  *    gentle look-around. Hotspot markers sit on the landmarks; following one (or a card) flies the camera in.
@@ -77,7 +77,7 @@ const stops = await heroStops();
       <a class="skip" href="#work">Skip to work <span aria-hidden="true">↓</span></a>
     </div>
 
-    {/* The sections: all four cards appear together after the first scroll. */}
+    {/* The sections: all three cards appear together after the first scroll. */}
     <ol class="cards" data-cards aria-label="Sections">
       {
         stops.map((s, i) => (
@@ -358,7 +358,7 @@ const stops = await heroStops();
     right: var(--gutter);
     bottom: clamp(1.25rem, 5svh, 3rem);
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.75rem;
     max-width: 72rem;
     margin-inline: auto;
@@ -441,12 +441,16 @@ const stops = await heroStops();
     cursor: grabbing;
   }
 
-  /* Phones and narrow screens: a 2 × 2 grid over the calm water at the bottom, names only. */
+  /* Phones and narrow screens: a two-column grid (an odd last card spans both) over the calm water at the bottom, names only. */
   @media (max-width: 48rem), (orientation: portrait) {
     :global(html.hero-motion) .cards {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.5rem;
       bottom: clamp(1rem, 4svh, 2rem);
+    }
+
+    :global(html.hero-motion) .cards > .card:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
     }
 
     .card a {
@@ -522,7 +526,7 @@ const stops = await heroStops();
 
   /**
    * The reveal: any scroll past the top (or Tab into the cards, or "Skip to work") swaps the headline for
-   * the four section cards.
+   * the three section cards.
    */
   function setUpTour(root: HTMLElement) {
     const list = root.querySelector<HTMLElement>('[data-cards]')!;

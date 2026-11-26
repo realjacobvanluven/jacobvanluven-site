@@ -4,6 +4,7 @@ import { getCollection } from 'astro:content';
  * The homepage scroll tour: one stop per landmark, in camera order (left to right across the skyline).
  * `id` matches a hotspot anchor in src/hero/scene.js. Descriptions use the site's own wording; keep them
  * factual. Science World is "the lab" (Tools) once a tool is published; until then it leads to Comms.
+ * BC Place is scenery only (its Experience hotspot was removed by Jacob, 2026-11-25); Experience stays in the nav.
  */
 export type HeroStop = { id: string; place: string; label: string; href: string; description: string };
 
@@ -16,13 +17,6 @@ export async function heroStops(): Promise<HeroStop[]> {
       label: 'Journalism',
       href: '/journalism/',
       description: 'Deadline news, features, audio, video, data visualization and social.',
-    },
-    {
-      id: 'bcPlace',
-      place: 'BC Place',
-      label: 'Experience',
-      href: '/experience/',
-      description: 'Roles at BCI and the Emergency Planning Secretariat.',
     },
     {
       id: 'harbourCentre',
