@@ -159,6 +159,38 @@ button.legend-item[aria-pressed='true'] {
   display: none;
 }
 
+/* Small screens: a compact key, so the current role shows on the first screen. */
+@media (max-width: 47.99rem) {
+  .map-key {
+    gap: 0.6rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+  }
+
+  .legend-item,
+  .filter {
+    min-height: 2.25rem; /* 36px: above the 24px WCAG 2.5.8 minimum */
+    font-size: 0.875rem;
+  }
+
+  .filter {
+    padding: 0 0.8rem;
+  }
+
+  .xp:has(button.legend-item) .legend ul,
+  .filter-buttons {
+    gap: 0.4rem;
+  }
+
+  .legend-title {
+    margin-bottom: 0.3rem;
+  }
+
+  .swatch {
+    width: 1.4rem;
+  }
+}
+
 /* ---------- Stations (mobile first: one rail) ---------- */
 
 .stations {
@@ -542,7 +574,7 @@ details[open] > summary::before {
   @supports (animation-timeline: view()) {
     .station {
       view-timeline: --xp-station block;
-      view-timeline-inset: 0 30%; /* the drawing edge sits ~70% down the screen */
+      view-timeline-inset: 0 20%; /* the drawing edge sits ~80% down the screen */
     }
 
     .track {
@@ -573,6 +605,11 @@ details[open] > summary::before {
     .station .marker {
       animation-range: entry 0.75rem entry 1.75rem;
     }
+
+    /* You are here is always lit, even before the line reaches it. */
+    .station.is-current .marker {
+      animation-name: none;
+    }
   }
 
   /* Fallback (no scroll-driven animations): each row draws once as it enters. */
@@ -581,7 +618,7 @@ details[open] > summary::before {
     transition: stroke-dashoffset 0.9s ease-out, stroke-width 0.2s ease;
   }
 
-  .xp-io .marker:not(.is-drawn *) {
+  .xp-io .station:not(.is-drawn, .is-current) .marker {
     background: var(--bg);
     border-color: var(--line-off);
   }
