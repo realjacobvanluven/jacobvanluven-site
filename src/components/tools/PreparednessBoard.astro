@@ -281,7 +281,20 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     mapWrap.hidden = false;
     if (map) return;
     try {
-      const [{ default: maplibregl }] = await Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl.css')]);
+      const [maplibregl, { default: workerUrl }, { default: css }] = await Promise.all([
+        import('maplibre-gl'),
+        // The worker is loaded by URL at runtime, so the bundler can't see it; `?url` makes it emit the file.
+        import('maplibre-gl/dist/maplibre-gl-worker.mjs?url'),
+        // Inlined as text and injected here: with `inlineStylesheets: 'always'` no separate CSS file is emitted to fetch.
+        import('maplibre-gl/dist/maplibre-gl.css?inline'),
+      ]);
+      if (!document.querySelector('style[data-maplibre]')) {
+        const st = document.createElement('style');
+        st.dataset.maplibre = '';
+        st.textContent = css;
+        document.head.append(st);
+      }
+      maplibregl.setWorkerUrl(new URL(workerUrl, location.href).href);
       map = new maplibregl.Map({
         container: $('[data-map]'),
         style: 'https://tiles.openfreemap.org/styles/dark',
@@ -291,7 +304,8 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
       // A basemap that can't load (service down, offline) would leave a blank box: say so instead.
-      map.on('error', () => {
+      map.on('error', (e) => {
+        console.warn('Preparedness map error', e.error);
         if (map && !map.isStyleLoaded()) {
           $('[data-maperr]').hidden = false;
           $('[data-map]').hidden = true;
@@ -313,7 +327,8 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
           });
         }
       });
-    } catch {
+    } catch (err) {
+      console.warn('Preparedness map failed to start', err);
       $('[data-maperr]').hidden = false;
       $('[data-map]').hidden = true;
     }
