@@ -6,8 +6,9 @@ export function formatYearMonth(ym: string): string {
   return `${months[m - 1]} ${y}`;
 }
 
+/** "2024-09", "2024-12" → "Sep 2024 – Dec 2024"; a missing end or "present" → "… – Present". */
 export function formatRange(start: string, end?: string): string {
-  return `${formatYearMonth(start)} – ${end ? formatYearMonth(end) : 'Present'}`;
+  return `${formatYearMonth(start)} – ${end && end !== 'present' ? formatYearMonth(end) : 'Present'}`;
 }
 
 /** Date → "Feb 2021" (UTC, so frontmatter dates don't shift a day by timezone). */

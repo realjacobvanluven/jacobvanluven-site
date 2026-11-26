@@ -1,17 +1,19 @@
 ---
+line: bci
+role: Technology Research and Communications Co-op
 org: British Columbia Investment Management Corp. (BCI)
 orgShort: BCI
-role: Technology Research and Communications Co-op
+orgUrl: https://www.bci.ca/
 location: Victoria, B.C.
-employment: co-op
 start: 2025-01
 end: 2025-04
-skills:
-  - Technology research
-  - SME interviews
-  - Technical white papers
-  - Award nominations
-  - Intranet articles
+# TODO(Jacob): one-line summary for the collapsed card (none exists yet; the card shows without one).
+# "Award nominations" tag removed under the no-awards rule. TODO(Jacob): confirm (it was live until 2026-11-25).
+tags:
+  - { label: Technology research, strand: storytelling }
+  - { label: SME interviews, strand: storytelling }
+  - { label: Technical white papers, strand: storytelling }
+  - { label: Intranet articles, strand: storytelling }
 # Source: From the Wix "Term #2" text.
 ---
 

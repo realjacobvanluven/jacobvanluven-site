@@ -5,28 +5,46 @@ import { z } from 'astro/zod';
 /** Month precision, e.g. "2025-12". Avoids inventing exact days we don't have. */
 const yearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use YYYY-MM');
 
+/** Transit-map lines on /experience: one per organization, plus education. */
+export const lines = ['bci', 'eps', 'edu'] as const;
+/** The site's three strands; every experience tag belongs to exactly one. */
+export const strands = ['storytelling', 'business', 'building'] as const;
+
 /**
- * Roles for the /experience timeline. One file per role.
- * BCI work is confidential: describe the role and skills, never deliverables.
+ * Stations on the /experience timeline (SkyTrain-map style). One file per role or school.
+ * BCI work is confidential: describe the role and skills, never deliverables. No awards, hackathon results,
+ * numbers, or internal tool/project names in new copy.
  */
 const experience = defineCollection({
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/experience' }),
   schema: z.object({
-    org: z.string(),
-    orgShort: z.string().optional(),
+    line: z.enum(lines),
     role: z.string(),
+    org: z.string(),
+    /** Short name for the line chip, e.g. "BCI". */
+    orgShort: z.string().optional(),
+    orgUrl: z.url().optional(),
     location: z.string().optional(),
-    workMode: z.enum(['on-site', 'hybrid', 'remote']).optional(),
-    employment: z.enum(['full-time', 'contract', 'co-op', 'internship']),
-    start: yearMonth,
-    /** Omit for a current role. */
-    end: yearMonth.optional(),
+    mode: z.enum(['on-site', 'hybrid', 'remote']).optional(),
+    /** Omit when unknown (leave a TODO comment); the page then hides the dates. */
+    start: yearMonth.optional(),
+    /** "present" for a current role. */
+    end: z.union([yearMonth, z.literal('present')]).optional(),
+    /** Employment type shown on the card, e.g. "Contract, full-time". */
+    type: z.string().optional(),
+    /** One line, shown on the collapsed card. */
     summary: z.string().optional(),
-    skills: z.array(z.string()).default([]),
-    /** Tools and systems built in the role: a name, the tech, and what it does. No confidential detail. */
-    builds: z
-      .array(z.object({ name: z.string(), tech: z.string().optional(), what: z.string() }))
-      .default([]),
+    /** Approved bullet points, shown when the card is expanded. */
+    highlights: z.array(z.string()).default([]),
+    /**
+     * Proposed bullets waiting for Jacob's approval. Shown only in `npm run dev` (inside a TODO box), never in
+     * production. Once approved, move them to `highlights`.
+     */
+    draftHighlights: z.array(z.string()).default([]),
+    tags: z.array(z.object({ label: z.string(), strand: z.enum(strands) })).default([]),
+    current: z.boolean().default(false),
+    /** Another line meets this one at this station (drawn as an interchange), e.g. EPS → BCI in fall 2024. */
+    interchange: z.enum(lines).optional(),
   }),
 });
 

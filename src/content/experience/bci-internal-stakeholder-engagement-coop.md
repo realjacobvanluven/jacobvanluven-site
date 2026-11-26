@@ -1,15 +1,19 @@
 ---
+line: bci
+role: Internal Stakeholder Engagement Co-op
 org: British Columbia Investment Management Corp. (BCI)
 orgShort: BCI
-role: Internal Stakeholder Engagement Co-op
+orgUrl: https://www.bci.ca/
 location: Victoria, B.C.
-employment: co-op
 start: 2024-09
 end: 2024-12
-skills:
-  - Internal comms strategy
-  - News articles
-  - Intranet content and management
+# Jacob moved from EPS to BCI here (summer to fall 2024): drawn as an interchange.
+interchange: eps
+# TODO(Jacob): one-line summary for the collapsed card (none exists yet; the card shows without one).
+tags:
+  - { label: Internal comms strategy, strand: storytelling }
+  - { label: News articles, strand: storytelling }
+  - { label: Intranet content and management, strand: business }
 # Source: From the Wix "My Experience at BCI" section (intro covers both co-op terms), then the Term #1 text.
 ---
 

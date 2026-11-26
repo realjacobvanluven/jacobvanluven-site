@@ -1,9 +1,10 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { formatRange } from '../lib/format';
+import { getStations } from '../lib/experience';
 
-const roles = (await getCollection('experience')).sort((a, b) => b.data.start.localeCompare(a.data.start));
+const roles = await getStations();
 const rendered = await Promise.all(roles.map(async (r) => ({ role: r, Content: (await render(r)).Content })));
 ---
 
@@ -13,36 +14,20 @@ const rendered = await Promise.all(roles.map(async (r) => ({ role: r, Content: (
     {
       rendered.map(({ role: { data }, Content }) => (
         <li>
-          <p class="label">
-            {formatRange(data.start, data.end)}
-          </p>
+          {data.start && <p class="label">{formatRange(data.start, data.end)}</p>}
           <h2>{data.role}</h2>
           <p class="meta">
             {data.org}
             {data.location && ` · ${data.location}`}
-            {data.workMode && ` (${data.workMode})`}
+            {data.mode && ` (${data.mode})`}
           </p>
           {data.summary && <p>{data.summary}</p>}
-          {data.skills.length > 0 && (
+          {data.tags.length > 0 && (
             <ul class="skills">
-              {data.skills.map((s) => (
-                <li>{s}</li>
+              {data.tags.map((t) => (
+                <li>{t.label}</li>
               ))}
             </ul>
-          )}
-          {data.builds.length > 0 && (
-            <div class="builds">
-              <h3 class="label">What I built</h3>
-              <ul>
-                {data.builds.map((b) => (
-                  <li>
-                    <p class="build-name">{b.name}</p>
-                    {b.tech && <p class="build-tech">{b.tech}</p>}
-                    <p class="build-what">{b.what}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
           )}
           <Content />
         </li>
@@ -50,54 +35,3 @@ const rendered = await Promise.all(roles.map(async (r) => ({ role: r, Content: (
     }
   </ol>
 </BaseLayout>
-
-<style>
-  .builds {
-    margin-top: 1.25rem;
-  }
-
-  .builds h3 {
-    margin: 0 0 0.75rem;
-  }
-
-  .builds ul {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-    gap: 0.75rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .builds li {
-    padding: 1rem 1.1rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 8px;
-  }
-
-  .builds p {
-    margin: 0;
-  }
-
-  .build-name {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.0625rem;
-    line-height: 1.25;
-  }
-
-  .build-tech {
-    margin-top: 0.2rem !important;
-    font: 500 0.75rem var(--font-mono);
-    letter-spacing: 0.04em;
-    color: var(--accent-soft);
-  }
-
-  .build-what {
-    margin-top: 0.5rem !important;
-    font-size: 0.9375rem;
-    color: var(--text-muted);
-  }
-</style>
