@@ -9,8 +9,11 @@ export const SNAPSHOT_URL = '/data/preparedness-snapshot.json';
 /** A snapshot older than this is shown with a stale warning. A proposal: tune after watching it run. */
 export const STALE_SNAPSHOT_HOURS = 36;
 
-/** An evacuation record untouched for this long is flagged as possibly out of date. */
-export const OLD_RECORD_DAYS = 365;
+/**
+ * An evacuation record untouched for this long is treated as probably rescinded: it stays in the list with a
+ * warning but is not drawn on the map. The BC dataset still carries orders last modified in 2022-2025.
+ */
+export const OLD_RECORD_DAYS = 60;
 
 /** How long to wait for one source before giving up on it. */
 export const FETCH_TIMEOUT_MS = 10_000;

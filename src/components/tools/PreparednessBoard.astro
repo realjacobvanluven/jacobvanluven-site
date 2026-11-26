@@ -195,7 +195,7 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     if (a.summary) c.append(el('p', 'sum', a.summary));
     const bits = [a.area, a.updatedAt ? `Updated ${when(a.updatedAt)}` : a.issuedAt ? `Issued ${when(a.issuedAt)}` : ''].filter(Boolean);
     if (bits.length) c.append(el('p', 'meta', bits.join(' · ')));
-    if (a.looksOld) c.append(el('p', 'meta old', 'This record has not been updated in over a year and may be out of date.'));
+    if (a.looksOld) c.append(el('p', 'meta old', 'This record has not been updated in a long time and may no longer be in effect. Check the official source.'));
     if (a.officialText) {
       const d = el('details');
       d.append(el('summary', undefined, 'Official text'));
@@ -263,7 +263,7 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   // ---- Map (MapLibre is loaded only when the person opens it) ----
   function toGeoJson() {
     const features = visible()
-      .filter((a) => a.geometry)
+      .filter((a) => a.geometry && !a.looksOld)
       .map((a) => ({
         type: 'Feature' as const,
         geometry: a.geometry as never,
