@@ -1,10 +1,11 @@
 ---
 line: edu
-# TODO(Jacob): exact credential name (e.g. the degree title). Shown as on /about until then.
-role: Journalism and Communications
+role: B.A. in Journalism and Communications
 org: Kwantlen Polytechnic University
 orgShort: KPU
 location: Surrey, B.C.
-# TODO(Jacob): start and end dates (YYYY-MM). Dates stay hidden on the page until they're set.
-# Source: src/data/education.ts. No bullets unless Jacob supplies them.
+# Years only (Jacob, 2026-11-25); months not given.
+start: '2021'
+end: '2025'
+# Source: Jacob (2026-11-25) and src/data/education.ts. No bullets unless Jacob supplies them.
 ---

@@ -4,6 +4,8 @@ import { z } from 'astro/zod';
 
 /** Month precision, e.g. "2025-12". Avoids inventing exact days we don't have. */
 const yearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use YYYY-MM');
+/** "2021" or "2021-09": a year alone when the month isn't known (don't invent one). */
+const yearOrMonth = z.string().regex(/^\d{4}(-(0[1-9]|1[0-2]))?$/, 'Use YYYY or YYYY-MM');
 
 /** Transit-map lines on /experience: one per organization, plus education. */
 export const lines = ['bci', 'eps', 'edu'] as const;
@@ -26,10 +28,10 @@ const experience = defineCollection({
     orgUrl: z.url().optional(),
     location: z.string().optional(),
     mode: z.enum(['on-site', 'hybrid', 'remote']).optional(),
-    /** Omit when unknown (leave a TODO comment); the page then hides the dates. */
-    start: yearMonth.optional(),
+    /** YYYY-MM, or YYYY when the month isn't known. Omit when unknown (leave a TODO comment); the page hides the dates. */
+    start: yearOrMonth.optional(),
     /** "present" for a current role. */
-    end: z.union([yearMonth, z.literal('present')]).optional(),
+    end: z.union([yearOrMonth, z.literal('present')]).optional(),
     /** Employment type shown on the card, e.g. "Contract, full-time". */
     type: z.string().optional(),
     /** One line, shown on the collapsed card. */

@@ -4,7 +4,7 @@ role: Technology Governance and Business Continuity Planning Intern
 org: British Columbia Investment Management Corp. (BCI)
 orgShort: BCI
 orgUrl: https://www.bci.ca/
-# TODO(Jacob): location for this term (not given on the resume).
+location: Vancouver, B.C.
 start: 2025-09
 end: 2025-12
 summary: Supported the Business Continuity Planning (BCP) program, and built the tools and guides around it.

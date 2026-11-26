@@ -1,6 +1,5 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Todo from '../components/Todo.astro';
 import ExperienceTimeline from '../components/experience/ExperienceTimeline.astro';
 import { getStations } from '../lib/experience';
 
@@ -13,14 +12,17 @@ const stations = await getStations();
 >
   <p class="back"><a href="/">↖ Back to the skyline</a></p>
   <h1>Experience</h1>
-  <Todo>
-    TODO(Jacob): one-sentence intro. Example tone, not final: "Four stops at BCI, one at EPS, and the schools that got me
-    there."
-  </Todo>
+  <p class="intro">Four stops at BCI, one at EPS, and the schools that got me there.</p>
   <ExperienceTimeline stations={stations} />
 </BaseLayout>
 
 <style>
+  .intro {
+    margin: -0.5rem 0 1.75rem;
+    font-size: 1.125rem;
+    color: var(--text-muted);
+  }
+
   .back {
     margin: 0 0 0.75rem;
     font: 500 0.8125rem var(--font-mono);

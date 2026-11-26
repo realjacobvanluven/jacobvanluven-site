@@ -7,8 +7,8 @@ orgUrl: https://www.bci.ca/
 location: Victoria, B.C.
 start: 2025-01
 end: 2025-04
-# TODO(Jacob): one-line summary for the collapsed card (none exists yet; the card shows without one).
-# "Award nominations" tag removed under the no-awards rule. TODO(Jacob): confirm (it was live until 2026-11-25).
+summary: Researched technology topics, interviewed subject matter experts, and turned the findings into white papers and intranet articles.
+# Summary approved by Jacob 2026-11-25. "Award nominations" tag removed under the no-awards rule (confirmed 2026-11-25).
 tags:
   - { label: Technology research, strand: storytelling }
   - { label: SME interviews, strand: storytelling }

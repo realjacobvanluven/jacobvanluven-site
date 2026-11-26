@@ -40,4 +40,10 @@ Original closing sentence: "Internal details stay confidential; the builds above
 
 ## Technology Research and Communications Co-op (BCI, Jan–Apr 2025)
 
-Removed tag (no-awards rule, pending Jacob's confirmation): "Award nominations".
+Removed tag (no-awards rule, confirmed by Jacob 2026-11-25): "Award nominations".
+
+## Client Success Specialist: prose replaced by approved bullets (2026-11-25)
+
+I manage operations for an enterprise innovation portfolio: running monthly executive councils, producing performance dashboards for senior leadership, and leading engagement initiatives across the organization. I also help coordinate delivery of AI products, working with engineering teams on defect triage, testing and priorities.
+
+Much of the role sits between business users and developers, so I build the tools I need rather than waiting for them. Details of internal work stay confidential.

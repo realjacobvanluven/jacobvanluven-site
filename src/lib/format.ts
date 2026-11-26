@@ -1,7 +1,8 @@
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "2025-12" → "Dec 2025" */
+/** "2025-12" → "Dec 2025"; a bare year stays "2021". */
 export function formatYearMonth(ym: string): string {
+  if (!ym.includes('-')) return ym;
   const [y, m] = ym.split('-').map(Number);
   return `${months[m - 1]} ${y}`;
 }

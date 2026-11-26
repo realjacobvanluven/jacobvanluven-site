@@ -13,16 +13,13 @@ export const lineNames: Record<Line, string> = {
 
 export const strandNames = { storytelling: 'Storytelling', business: 'Business', building: 'Building' } as const;
 
-/**
- * All stations, newest first (by start month). Stations without dates (education, until Jacob adds them) go last,
- * in reverse id order, so `edu-kpu` sits above `edu-langara` (Langara came first).
- */
+/** All stations, newest first (by start). Any station without dates goes last, in reverse id order. */
 export async function getStations(): Promise<Station[]> {
   const all = await getCollection('experience');
   return all.sort((a, b) => {
     const sa = a.data.start;
     const sb = b.data.start;
-    if (sa && sb) return sb.localeCompare(sa);
+    if (sa && sb) return sb.localeCompare(sa) || b.id.localeCompare(a.id);
     if (sa) return -1;
     if (sb) return 1;
     return a.id.localeCompare(b.id);
@@ -42,7 +39,12 @@ export type Segment = {
   station: boolean;
 };
 
-const monthKey = (end?: string) => (!end || end === 'present' ? '9999-12' : end);
+/**
+ * Comparable months. A bare year counts as its January, at both ends, so an overlap is only drawn where it is
+ * certain (e.g. KPU 2021–2025 runs beside the Jan 2025 co-op but not the Sep 2025 internship).
+ */
+const month = (ym: string) => (ym.length === 4 ? `${ym}-01` : ym);
+const monthKey = (end?: string) => (!end || end === 'present' ? '9999-12' : month(end));
 
 /**
  * For each row (station, newest first), where each line's track runs. A line is "active" in a row when that row's
@@ -55,13 +57,13 @@ export function buildRail(stations: Station[]): Segment[][] {
   for (const line of lines) {
     const own = stations.filter((s) => s.data.line === line);
     const dated = own.filter((s) => s.data.start);
-    const from = dated.map((s) => s.data.start!).sort()[0];
+    const from = dated.map((s) => month(s.data.start!)).sort()[0];
     const to = dated.map((s) => monthKey(s.data.end)).sort().at(-1);
     const rows = stations.map(
       (s) =>
         s.data.line === line ||
         s.data.interchange === line ||
-        Boolean(from && to && s.data.start && s.data.start >= from && s.data.start <= to),
+        Boolean(from && to && s.data.start && month(s.data.start) >= from && month(s.data.start) <= to),
     );
     const first = rows.indexOf(true);
     const last = rows.lastIndexOf(true);

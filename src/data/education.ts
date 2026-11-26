@@ -3,7 +3,7 @@
  */
 export const education = [
   {
-    credential: 'Journalism and Communications',
+    credential: 'B.A. in Journalism and Communications',
     school: 'Kwantlen Polytechnic University (Surrey, B.C.)',
     note: 'Dean’s Honour Roll, 2022–2024',
   },
