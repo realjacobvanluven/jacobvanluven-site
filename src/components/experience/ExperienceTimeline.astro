@@ -67,8 +67,11 @@ const rendered = await Promise.all(stations.map(async (s) => (await render(s)).C
       const io = new IntersectionObserver((entries) => {
         for (const e of entries) {
           if (!e.isIntersecting) continue;
-          e.target.classList.add('is-drawn');
-          io.unobserve(e.target);
+          // Draw this row and every row above it (a jump to the bottom shouldn't leave gaps in the line).
+          for (const s of stations.slice(0, stations.indexOf(e.target as HTMLElement) + 1)) {
+            s.classList.add('is-drawn');
+            io.unobserve(s);
+          }
         }
       });
       stations.forEach((s) => io.observe(s));

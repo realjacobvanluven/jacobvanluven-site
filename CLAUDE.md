@@ -192,7 +192,12 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 
 ## Site structure (proposed)
 - `/` — cityscape hero, short intro, highlights.
-- `/experience` — timeline (see below).
+- `/experience` — timeline (see below). SkyTrain-map timeline (2026-11-25, branch `feature/experience-timeline`): roles are
+  stations, organizations are lines (BCI, EPS, Education) in TransLink-inspired colours (page-scoped tokens in
+  `src/styles/experience.css`, checked by `npm run check:experience-contrast`; no orange inside the timeline). One content
+  entry per station in `src/content/experience/` (`line`, `tags` with a strand, `current`, `interchange`; `draftHighlights`
+  render only in dev until Jacob approves them). Components in `src/components/experience/`; lane layout in
+  `src/lib/experience.ts`. The old "What I built" blocks are archived in `content-archive/experience/`.
 - `/journalism` — written stories, audio/podcasts, videos, data visualizations.
 - `/comms` — EPS work: Preparedness Series, short videos, social media designs.
 - `/tools` and `/tools/<slug>` — interactive tools Jacob builds later. Scaffold the section and a
