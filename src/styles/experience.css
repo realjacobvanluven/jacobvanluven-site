@@ -49,10 +49,14 @@
 .legend ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1.25rem;
+  gap: 0.5rem 1.25rem;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.xp:has(button.legend-item) .legend ul {
+  gap: 0.5rem;
 }
 
 .legend-item {
@@ -69,14 +73,20 @@
 }
 
 button.legend-item {
+  padding: 0 0.9rem 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   cursor: pointer;
-  border-radius: 6px;
+}
+
+button.legend-item:hover {
+  border-color: var(--text-muted);
 }
 
 button.legend-item[aria-pressed='true'] {
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 0.3em;
+  border-color: var(--swatch);
+  box-shadow: inset 0 0 0 1px var(--swatch);
 }
 
 /* A short piece of line with a station on it. */
@@ -462,5 +472,152 @@ details[open] > summary::before {
 
   .card {
     padding: 1rem 1.4rem 1.25rem; /* top padding keeps the marker on the first line */
+  }
+}
+
+/* ---------- Interactions (the script adds the filter state classes) ---------- */
+
+/* Hover or focus a card: its station and its own line light up, like the skyline's hotspots. */
+.track {
+  transition: stroke-width 0.2s ease, opacity 0.2s ease;
+}
+
+.station:is(:hover, :focus-within) .marker {
+  transform: scale(1.25);
+}
+
+.station:is(:hover, :focus-within) .track.is-own {
+  stroke-width: 6px;
+}
+
+.station:is(:hover, :focus-within) .card {
+  border-color: var(--row-line);
+}
+
+/* Filtered out: still readable (AA text) and focusable, just quieter. */
+.station.is-dim .card {
+  border-color: var(--border);
+  border-left-color: var(--line-off);
+}
+
+.station.is-dim :is(h2, .summary, .prose) {
+  color: var(--text-muted);
+}
+
+.station.is-dim .chip-line {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.station.is-dim .chip-line::before {
+  background: var(--line-off);
+}
+
+.station.is-dim .track,
+.station.is-dim .marker {
+  opacity: 0.3;
+}
+
+.tag.is-match {
+  color: var(--text);
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.tag.is-match::before {
+  content: '✓ ' / '';
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    transition: border-color 0.2s ease;
+  }
+
+  /* You are here: a soft pulse around the current station. */
+  .is-current .marker::after {
+    animation: xp-pulse 2.6s ease-out infinite;
+  }
+
+  /* Lines draw in with scroll; each station lights up as its line reaches it. */
+  @supports (animation-timeline: view()) {
+    .station {
+      view-timeline: --xp-station block;
+      view-timeline-inset: 0 30%; /* the drawing edge sits ~70% down the screen */
+    }
+
+    .track {
+      animation: xp-draw linear both;
+    }
+
+    .marker {
+      animation: xp-light linear both;
+    }
+
+    /* Separate rules on purpose: the CSS minifier would otherwise fold animation-timeline into the `animation`
+       shorthand, which browsers reject. */
+    .station .track,
+    .station .marker {
+      animation-timeline: --xp-station;
+    }
+
+    .station .track {
+      animation-range: entry 0% entry 100%;
+    }
+
+    /* Short pieces that end at a station (nothing below): finish by the time the station is reached, so the
+       last rows complete even when the page can't scroll them far up. */
+    .station .track.is-stub {
+      animation-range: entry 0% entry 1.75rem;
+    }
+
+    .station .marker {
+      animation-range: entry 0.75rem entry 1.75rem;
+    }
+  }
+
+  /* Fallback (no scroll-driven animations): each row draws once as it enters. */
+  .xp-io .track {
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 0.9s ease-out, stroke-width 0.2s ease;
+  }
+
+  .xp-io .marker:not(.is-drawn *) {
+    background: var(--bg);
+    border-color: var(--line-off);
+  }
+
+  .xp-io .marker {
+    transition: background-color 0.3s ease 0.35s, border-color 0.3s ease 0.35s, transform 0.2s ease;
+  }
+
+  .xp-io .is-drawn .track {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes xp-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes xp-light {
+  from {
+    background-color: var(--bg);
+    border-color: var(--line-off);
+  }
+}
+
+@keyframes xp-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
   }
 }

@@ -49,7 +49,7 @@ const STATION_Y = '1.75em';
       {
         segments.map((s) => (
           <line
-            class:list={['track', { 'is-own': s.line === d.line || s.station }]}
+            class:list={['track', { 'is-own': s.line === d.line || s.station, 'is-stub': !s.bottom }]}
             data-line={s.line}
             x1={laneX(s.line)}
             x2={laneX(s.line)}
@@ -64,7 +64,7 @@ const STATION_Y = '1.75em';
       {
         !(first && last) && (
           <line
-            class="track is-own"
+            class:list={['track is-own', { 'is-stub': last }]}
             data-line={d.line}
             x1="50%"
             x2="50%"
