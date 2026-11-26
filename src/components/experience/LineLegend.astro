@@ -1,0 +1,24 @@
+---
+/**
+ * Map-style legend for the /experience lines. Static with JS off; the timeline script turns each item into a
+ * toggle button that isolates its line.
+ */
+import { lines } from '../../content.config';
+import { lineNames } from '../../lib/experience';
+---
+
+<div class="legend">
+  <p class="legend-title" id="legend-title">Lines</p>
+  <ul aria-labelledby="legend-title" data-line-legend>
+    {
+      lines.map((line) => (
+        <li>
+          <span class="legend-item" data-line={line}>
+            <span class="swatch" aria-hidden="true" />
+            <span>{lineNames[line]}</span>
+          </span>
+        </li>
+      ))
+    }
+  </ul>
+</div>

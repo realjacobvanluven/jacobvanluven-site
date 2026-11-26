@@ -1,0 +1,466 @@
+/*
+ * /experience SkyTrain-map timeline. Imported only by ExperienceTimeline.astro, so it ships on that page alone.
+ * Line colours evoke TransLink's lines (colour only: no logos, signage type or station graphics).
+ * Orange stays out of the timeline; it is kept for the site's global UI (nav, focus rings, skip link).
+ */
+
+.xp {
+  /* Line colour tokens. Strokes/markers need ≥ 3:1 on --bg; -text variants need ≥ 4.5:1 on --bg and --surface.
+     Checked by `npm run check:experience-contrast` (scripts/check-experience-contrast.mjs). */
+  --line-bci: #2f7fdc; /* Expo Line blue */
+  --line-bci-text: #8ab8f5;
+  --line-eps: #f5c400; /* Millennium Line yellow */
+  --line-eps-text: #f5c400;
+  --line-edu: #13a5b0; /* Canada Line teal */
+  --line-edu-text: #4fc9d1;
+  --line-off: #3a3a3a; /* unlit / dimmed track (decorative) */
+
+  --lane-w: 1.5rem;
+  --marker: 1rem;
+  /* Station marker centre, measured from the top of the row: aligns with the card's first line. */
+  --station-y: 1.75rem;
+  --track-w: 4px;
+}
+
+.station[data-line='bci'] { --row-line: var(--line-bci); --row-line-text: var(--line-bci-text); }
+.station[data-line='eps'] { --row-line: var(--line-eps); --row-line-text: var(--line-eps-text); }
+.station[data-line='edu'] { --row-line: var(--line-edu); --row-line-text: var(--line-edu-text); }
+
+/* ---------- Map key: legend + strand filter ---------- */
+
+.map-key {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 2rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.legend-title {
+  margin: 0 0 0.4rem;
+  font: 500 0.75rem/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem; /* touch target once it is a button */
+  padding: 0 0.25rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--text);
+  background: none;
+  border: 0;
+}
+
+button.legend-item {
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+button.legend-item[aria-pressed='true'] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+/* A short piece of line with a station on it. */
+.swatch {
+  position: relative;
+  flex: none;
+  width: 1.75rem;
+  height: var(--track-w);
+  border-radius: 2px;
+  background: var(--swatch);
+}
+
+.swatch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.7rem;
+  height: 0.7rem;
+  translate: -50% -50%;
+  border: 3px solid var(--swatch);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.legend-item[data-line='bci'] { --swatch: var(--line-bci); }
+.legend-item[data-line='eps'] { --swatch: var(--line-eps); }
+.legend-item[data-line='edu'] { --swatch: var(--line-edu); }
+
+.filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.filter {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.filter[aria-pressed='true'] {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.filter-reset {
+  color: var(--text-muted);
+  background: none;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  border-color: transparent;
+}
+
+.filter-status {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.filter-status:empty {
+  display: none;
+}
+
+/* ---------- Stations (mobile first: one rail) ---------- */
+
+.stations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.station {
+  display: grid;
+  grid-template-columns: var(--lane-w) minmax(0, 1fr);
+  column-gap: 0.75rem;
+  max-width: 60rem; /* overrides the global li measure; text inside keeps its own */
+  /* Gap between stations, as card margin (inside the grid row) so the tracks run unbroken. */
+  --row-gap: 1.25rem;
+}
+
+.year {
+  display: none;
+}
+
+.rail {
+  position: relative;
+}
+
+.tracks {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  font-size: 1rem; /* track ends are set in em */
+}
+
+.tracks-wide {
+  display: none;
+}
+
+.track {
+  stroke-width: var(--track-w);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.track[data-line='bci'] { stroke: var(--line-bci); }
+.track[data-line='eps'] { stroke: var(--line-eps); }
+.track[data-line='edu'] { stroke: var(--line-edu); }
+
+.marker {
+  position: absolute;
+  top: calc(var(--station-y) - var(--marker) / 2);
+  left: calc(50% - var(--marker) / 2);
+  width: var(--marker);
+  height: var(--marker);
+  background: var(--bg);
+  border: 3px solid var(--row-line);
+  border-radius: 999px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Interchange: the classic transit-map pill, outlined in off-white. */
+.is-interchange .marker {
+  border-color: var(--text);
+}
+
+/* You are here: a filled station. */
+.is-current .marker {
+  background: var(--row-line);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+.is-current .marker::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid var(--row-line);
+  opacity: 0;
+}
+
+/* ---------- Cards ---------- */
+
+.card {
+  min-width: 0;
+  margin-bottom: var(--row-gap);
+  padding: 1rem 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--row-line);
+  border-radius: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.station:last-child .card {
+  margin-bottom: 0;
+}
+
+.card > * {
+  margin: 0;
+}
+
+/* The first line of the card is 1.5rem tall: the station marker is centred on it (--station-y). */
+.topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  min-height: 1.5rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.5rem;
+  padding: 0 0.55rem;
+  font: 500 0.75rem/1 var(--font-mono);
+  letter-spacing: 0.03em;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.chip-line {
+  color: var(--row-line-text);
+  border-color: var(--row-line);
+}
+
+.chip-line::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--row-line);
+}
+
+.chip-here {
+  color: var(--bg);
+  background: var(--row-line-text);
+  border-color: var(--row-line-text);
+  font-weight: 700;
+}
+
+.when {
+  margin: 0;
+  font: 500 0.8125rem/1.5rem var(--font-mono);
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.card h2 {
+  margin: 0.6rem 0 0.25rem;
+  font-size: clamp(1.2rem, 3.2vw, 1.5rem);
+}
+
+.org {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.org a {
+  color: inherit;
+}
+
+.org a:hover {
+  color: var(--text);
+}
+
+.type {
+  margin-top: 0.2rem !important;
+  font: 500 0.75rem/1.5 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.summary {
+  margin-top: 0.6rem !important;
+}
+
+.card .todo {
+  margin-top: 0.5rem;
+}
+
+details {
+  margin-top: 0.75rem !important;
+}
+
+summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  font: 500 0.8125rem var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  rotate: -45deg;
+  transition: rotate 0.2s ease;
+}
+
+details[open] > summary::before {
+  rotate: 45deg;
+}
+
+.details-body {
+  padding-bottom: 0.25rem;
+  overflow: hidden;
+}
+
+.details-body > :first-child {
+  margin-top: 0.25rem;
+}
+
+.highlights {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+}
+
+.highlights li + li {
+  margin-top: 0.35rem;
+}
+
+.prose p {
+  margin: 0 0 0.85rem;
+}
+
+.prose a {
+  color: var(--text);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  font-size: 0.8125rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+/* ---------- Desktop: parallel tracks + sticky year ---------- */
+
+@media (min-width: 48rem) {
+  .xp {
+    --marker: 1.05rem;
+  }
+
+  .station {
+    grid-template-columns: 3.5rem calc(var(--lane-w) * 3) minmax(0, 1fr);
+    column-gap: 1rem;
+    --row-gap: 1.5rem;
+  }
+
+  .year {
+    display: block;
+    font: 600 0.875rem/1.5rem var(--font-mono);
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .year span {
+    position: sticky;
+    top: 1rem;
+    display: block;
+    margin-top: calc(var(--station-y) - 0.75rem);
+  }
+
+  .tracks-wide {
+    display: block;
+  }
+
+  .tracks-narrow {
+    display: none;
+  }
+
+  .marker {
+    left: calc((var(--lane) + 0.5) * var(--lane-w) - var(--marker) / 2);
+    width: calc(var(--span) * var(--lane-w) + var(--marker));
+  }
+
+  .card {
+    padding: 1rem 1.4rem 1.25rem; /* top padding keeps the marker on the first line */
+  }
+}

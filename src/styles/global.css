@@ -143,38 +143,18 @@ a:hover {
   }
 }
 
-/* Lists used by experience / stories pages. */
-.timeline,
+/* Lists used by story pages. */
 .story-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.timeline > li,
 .story-list > li {
   padding: 1.5rem 0;
   border-top: 1px solid var(--border);
 }
 
-.timeline h2,
 .story-list h2 {
   margin-top: 0.25rem;
-}
-
-.skills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.skills li {
-  font-size: 0.875rem;
-  padding: 0.2rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text-muted);
 }

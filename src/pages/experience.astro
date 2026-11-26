@@ -1,37 +1,39 @@
 ---
-import { render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { formatRange } from '../lib/format';
+import Todo from '../components/Todo.astro';
+import ExperienceTimeline from '../components/experience/ExperienceTimeline.astro';
 import { getStations } from '../lib/experience';
 
-const roles = await getStations();
-const rendered = await Promise.all(roles.map(async (r) => ({ role: r, Content: (await render(r)).Content })));
+const stations = await getStations();
 ---
 
-<BaseLayout title="Experience" description="Jacob Van Luven's work history at BCI and the Emergency Planning Secretariat.">
+<BaseLayout
+  title="Experience"
+  description="Jacob Van Luven's work history at BCI and the Emergency Planning Secretariat, plus education at Kwantlen Polytechnic University and Langara College."
+>
+  <p class="back"><a href="/">↖ Back to the skyline</a></p>
   <h1>Experience</h1>
-  <ol class="timeline">
-    {
-      rendered.map(({ role: { data }, Content }) => (
-        <li>
-          {data.start && <p class="label">{formatRange(data.start, data.end)}</p>}
-          <h2>{data.role}</h2>
-          <p class="meta">
-            {data.org}
-            {data.location && ` · ${data.location}`}
-            {data.mode && ` (${data.mode})`}
-          </p>
-          {data.summary && <p>{data.summary}</p>}
-          {data.tags.length > 0 && (
-            <ul class="skills">
-              {data.tags.map((t) => (
-                <li>{t.label}</li>
-              ))}
-            </ul>
-          )}
-          <Content />
-        </li>
-      ))
-    }
-  </ol>
+  <Todo>
+    TODO(Jacob): one-sentence intro. Example tone, not final: "Four stops at BCI, one at EPS, and the schools that got me
+    there."
+  </Todo>
+  <ExperienceTimeline stations={stations} />
 </BaseLayout>
+
+<style>
+  .back {
+    margin: 0 0 0.75rem;
+    font: 500 0.8125rem var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+
+  .back a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .back a:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+</style>

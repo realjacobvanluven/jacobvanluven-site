@@ -1,0 +1,54 @@
+---
+/**
+ * The /experience SkyTrain-map timeline: roles are stations, organizations are lines (plus education).
+ * Complete and readable with JS off. Styles and colour tokens: src/styles/experience.css.
+ */
+import { render } from 'astro:content';
+import '../../styles/experience.css';
+import { strands } from '../../content.config';
+import { buildRail, strandNames, type Station as StationEntry } from '../../lib/experience';
+import LineLegend from './LineLegend.astro';
+import Station from './Station.astro';
+
+interface Props {
+  stations: StationEntry[];
+}
+
+const { stations } = Astro.props;
+const rail = buildRail(stations);
+const rendered = await Promise.all(stations.map(async (s) => (await render(s)).Content));
+---
+
+<div class="xp" data-timeline>
+  <div class="map-key">
+    <LineLegend />
+    <div class="filters" data-filters hidden>
+      <p class="legend-title" id="strand-title">Strands</p>
+      <div class="filter-buttons" role="group" aria-labelledby="strand-title">
+        {
+          strands.map((s) => (
+            <button type="button" class="filter" data-strand={s} aria-pressed="false">
+              {strandNames[s]}
+            </button>
+          ))
+        }
+        <button type="button" class="filter filter-reset" data-reset>Show all</button>
+      </div>
+    </div>
+    <p class="filter-status" aria-live="polite" data-status></p>
+  </div>
+
+  <ol class="stations">
+    {
+      stations.map((s, i) => (
+        <Station
+          station={s}
+          Content={rendered[i]}
+          segments={rail[i]}
+          first={i === 0}
+          last={i === stations.length - 1}
+        />
+      ))
+    }
+  </ol>
+</div>
