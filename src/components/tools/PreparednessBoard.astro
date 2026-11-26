@@ -40,7 +40,10 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   </div>
 
   <p class="loading" data-loading>Loading the latest data…</p>
-  <ol class="feed" data-feed aria-live="polite"></ol>
+  <details class="alerts" data-alerts>
+    <summary data-alerts-summary>All alerts</summary>
+    <ol class="feed" data-feed aria-live="polite"></ol>
+  </details>
 
   <details class="sources">
     <summary>Data sources and freshness</summary>
@@ -141,6 +144,9 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   .feed :global(.pastlist) { display: grid; gap: 0.6rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
   .feed :global(.empty) { color: var(--text-muted); }
 
+  .alerts { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; }
+  .alerts summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; font-weight: 600; }
+  .alerts .feed { padding-bottom: 1rem; }
   .sources { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; }
   .sources summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; }
   .sources ul { padding: 0 0 0.75rem 1.1rem; margin: 0; }
@@ -160,6 +166,7 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
   const feed = $('[data-feed]');
   const banner = $('[data-banner]');
+  const alertsSummary = $('[data-alerts-summary]');
   const mapBtn = $<HTMLButtonElement>('[data-mapbtn]');
   const mapWrap = $('[data-mapwrap]');
 
@@ -230,6 +237,7 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     const list = visible();
     const current = list.filter((a) => !isPast(a));
     const past = list.filter(isPast);
+    alertsSummary.textContent = board ? `All alerts (${current.length} active${past.length ? `, ${past.length} past` : ''})` : 'All alerts';
     if (!current.length && board) {
       const li = el('li', 'empty', board.status === 'unavailable' ? 'No data could be loaded.' : 'Nothing active for the selected types.');
       feed.append(li);
