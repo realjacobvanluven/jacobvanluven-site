@@ -279,7 +279,9 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
 
   async function openMap() {
     mapWrap.hidden = false;
-    if (map) return;
+    if (map) { map.resize(); return; }
+    $('[data-maperr]').hidden = true;
+    $('[data-map]').hidden = false;
     try {
       const [maplibregl, { default: workerUrl }, { default: css }] = await Promise.all([
         import('maplibre-gl'),
@@ -303,13 +305,17 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
         cooperativeGestures: true,
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-      // A basemap that can't load (service down, offline) would leave a blank box: say so instead.
+      // Only a basemap *style* that can't load (service down, offline) leaves a blank box, so only that shows the
+      // message. A single failed tile or icon request is normal on a flaky connection: the map copes, so ignore it.
+      let styleReady = false;
+      map.on('style.load', () => { styleReady = true; });
       map.on('error', (e) => {
         console.warn('Preparedness map error', e.error);
-        if (map && !map.isStyleLoaded()) {
-          $('[data-maperr]').hidden = false;
-          $('[data-map]').hidden = true;
-        }
+        if (styleReady) return;
+        $('[data-maperr]').hidden = false;
+        $('[data-map]').hidden = true;
+        map?.remove();
+        map = null; // opening the map again starts fresh
       });
       map.on('load', () => {
         map!.addSource('alerts', { type: 'geojson', data: toGeoJson() as never });
