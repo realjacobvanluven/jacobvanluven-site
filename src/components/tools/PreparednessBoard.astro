@@ -114,6 +114,10 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   .chip[aria-pressed='false'] { color: var(--text-muted); text-decoration: line-through; }
 
   .map { height: min(60vh, 32rem); min-height: 18rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .map :global(.pb-pop) { color: #0a0a0a; max-height: 14rem; overflow-y: auto; font-size: 0.8125rem; line-height: 1.4; }
+  .map :global(.pb-pop p) { margin: 0.15rem 0 0; max-width: none; color: #333; }
+  .map :global(.pb-pop-item + .pb-pop-item) { margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid #ccc; }
+  .map :global(.pb-pop a) { color: #b34700; display: inline-block; margin-top: 0.25rem; }
   .maperr, .loading { margin: 0; color: var(--text-muted); max-width: none; }
 
   .feed { display: grid; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
@@ -272,6 +276,22 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     return { type: 'FeatureCollection' as const, features };
   }
 
+  function popupEntry(a: Alert) {
+    const d = el('div', 'pb-pop-item');
+    d.append(el('strong', undefined, a.area || a.title));
+    d.append(el('p', undefined, `${HAZARD_LABELS[a.hazard]}: ${a.sourceLevel}`));
+    if (a.area && a.title !== a.area) d.append(el('p', undefined, a.title));
+    if (a.summary) d.append(el('p', undefined, a.summary));
+    if (a.issuedAt) d.append(el('p', undefined, `${a.hazard === 'wildfire' ? 'Started' : 'Issued'}: ${when(a.issuedAt)}`));
+    if (a.updatedAt && a.updatedAt !== a.issuedAt) d.append(el('p', undefined, `Last updated: ${when(a.updatedAt)}`));
+    const link = el('a', undefined, 'Official source');
+    link.href = a.url;
+    link.rel = 'noopener';
+    link.target = '_blank';
+    d.append(link);
+    return d;
+  }
+
   function updateMap() {
     const src = map?.getSource('alerts') as import('maplibre-gl').GeoJSONSource | undefined;
     src?.setData(toGeoJson() as never);
@@ -322,15 +342,20 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
         map!.addLayer({ id: 'a-fill', type: 'fill', source: 'alerts', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['get', 'colour'], 'fill-opacity': 0.25 } });
         map!.addLayer({ id: 'a-line', type: 'line', source: 'alerts', filter: ['!=', ['geometry-type'], 'Point'], paint: { 'line-color': ['get', 'colour'], 'line-width': 1.5 } });
         map!.addLayer({ id: 'a-pt', type: 'circle', source: 'alerts', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': ['get', 'colour'], 'circle-radius': 5, 'circle-stroke-color': '#0a0a0a', 'circle-stroke-width': 1 } });
+        // One click can land on several overlapping areas, so the popup lists every one under the pointer.
+        map!.on('click', (e) => {
+          const hits = map!.queryRenderedFeatures(e.point, { layers: ['a-fill', 'a-pt'] });
+          const ids = [...new Set(hits.map((f) => String(f.properties?.id)))];
+          const found = ids.map((id) => board?.alerts.find((a) => a.id === id)).filter((a): a is Alert => !!a);
+          if (!found.length) return;
+          const box = el('div', 'pb-pop');
+          for (const a of found.slice(0, 4)) box.append(popupEntry(a));
+          if (found.length > 4) box.append(el('p', 'pb-pop-more', `+ ${found.length - 4} more here. See the list below.`));
+          new maplibregl.Popup({ maxWidth: '320px' }).setLngLat(e.lngLat).setDOMContent(box).addTo(map!);
+        });
         for (const id of ['a-fill', 'a-pt']) {
-          map!.on('click', id, (e) => {
-            const p = e.features?.[0]?.properties;
-            if (!p) return;
-            const box = el('div');
-            box.style.color = '#0a0a0a';
-            box.append(el('strong', undefined, String(p.title)), el('br'), document.createTextNode(`${p.hazard} · ${p.level}`));
-            new maplibregl.Popup().setLngLat(e.lngLat).setDOMContent(box).addTo(map!);
-          });
+          map!.on('mouseenter', id, () => { map!.getCanvas().style.cursor = 'pointer'; });
+          map!.on('mouseleave', id, () => { map!.getCanvas().style.cursor = ''; });
         }
       });
     } catch (err) {
