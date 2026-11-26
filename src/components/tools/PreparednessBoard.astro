@@ -31,10 +31,10 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
         ))
       }
     </div>
-    <button type="button" class="mapbtn" data-mapbtn aria-expanded="false" aria-controls="pb-map">Show map</button>
+    <button type="button" class="mapbtn" data-mapbtn aria-expanded="true" aria-controls="pb-map">Hide map</button>
   </div>
 
-  <div class="map-wrap" data-mapwrap hidden>
+  <div class="map-wrap" data-mapwrap>
     <div id="pb-map" class="map" data-map role="region" aria-label="Map of active items. The list below has the same information."></div>
     <p class="maperr" data-maperr hidden>The map could not load. The list below has everything the map would show.</p>
   </div>
@@ -401,6 +401,11 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     if (open) mapWrap.hidden = true;
     else void openMap();
   });
+
+  // The map starts open; the button hides it.
+  mapBtn.setAttribute('aria-expanded', 'true');
+  mapBtn.textContent = 'Hide map';
+  void openMap();
 
   for (const chip of root.querySelectorAll<HTMLButtonElement>('.chip')) {
     chip.addEventListener('click', () => {
