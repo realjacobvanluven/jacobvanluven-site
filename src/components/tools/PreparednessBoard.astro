@@ -137,6 +137,8 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
   .feed :global(details) { margin-top: 0.5rem; }
   .feed :global(summary) { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; color: var(--accent); }
   .feed :global(.official-text) { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9375rem; margin: 0 0 0.5rem; max-width: none; }
+  .feed :global(.past > details) { margin-top: 0.4rem; }
+  .feed :global(.pastlist) { display: grid; gap: 0.6rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
   .feed :global(.empty) { color: var(--text-muted); }
 
   .sources { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; }
@@ -218,26 +220,45 @@ const hazards = HAZARD_ORDER.map((id) => ({ id, label: HAZARD_LABELS[id] }));
     return board ? board.alerts.filter((a) => active.has(a.hazard)) : [];
   }
 
+  // "Historical" = the source says it has ended (expiry passed) or the record looks long abandoned.
+  function isPast(a: Alert) {
+    return a.looksOld || (!!a.expiresAt && +new Date(a.expiresAt) < Date.now());
+  }
+
   function renderFeed() {
     feed.replaceChildren();
     const list = visible();
-    if (!list.length && board) {
+    const current = list.filter((a) => !isPast(a));
+    const past = list.filter(isPast);
+    if (!current.length && board) {
       const li = el('li', 'empty', board.status === 'unavailable' ? 'No data could be loaded.' : 'Nothing active for the selected types.');
       feed.append(li);
     }
     // Long lists: render the first 60, reveal the rest on request (keeps the page light on mobile).
-    const shown = list.slice(0, 60);
+    const shown = current.slice(0, 60);
     for (const a of shown) feed.append(card(a));
-    if (list.length > shown.length) {
+    if (current.length > shown.length) {
       const li = el('li');
-      const b = el('button', undefined, `Show ${list.length - shown.length} more`);
+      const b = el('button', undefined, `Show ${current.length - shown.length} more`);
       b.type = 'button';
       b.addEventListener('click', () => {
         li.remove();
-        for (const a of list.slice(60)) feed.append(card(a));
+        for (const a of current.slice(60)) feed.insertBefore(card(a), pastItem);
       });
       li.append(b);
       feed.append(li);
+    }
+    // Past alerts sit in a section that starts collapsed, so they don't bury what is happening now.
+    let pastItem: HTMLElement | null = null;
+    if (past.length) {
+      pastItem = el('li', 'past');
+      const d = el('details');
+      d.append(el('summary', undefined, `Past alerts (${past.length}): ended or not updated in a long time`));
+      const ul = el('ul', 'pastlist');
+      for (const a of past) ul.append(card(a));
+      d.append(ul);
+      pastItem.append(d);
+      feed.append(pastItem);
     }
     updateMap();
   }
