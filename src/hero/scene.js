@@ -162,7 +162,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   envScene.add(createSky(uniforms));
   const envMap = pmrem.fromScene(envScene, 0, 1, 40000).texture;
   scene.add(new THREE.HemisphereLight(0x3a4a7a, 0x07080c, 0.9));
-  const west = new THREE.DirectionalLight(0xff9a4a, 0.35);
+  const west = new THREE.DirectionalLight(0xff9a4a, 0.6); // the afterglow (see skyColor): warms west-facing sides
   west.position.set(...sunDirection().map((v) => v * 1000)).setY(60);
   scene.add(west);
   scene.fog = new THREE.FogExp2(new THREE.Color(0.04, 0.06, 0.14), uniforms.uFogDensity.value);

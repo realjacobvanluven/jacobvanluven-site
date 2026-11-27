@@ -151,8 +151,15 @@ export function createFacadeMaterial(uniforms) {
         // Facade grid. u along the wall, v up. Panel widths and floor heights by kind.
         vec2 t = normalize(vec2(-n.z, n.x));
         vec3 T = vec3(t.x, 0.0, t.y);
-        float floorH = isConcrete * 3.0 + isResi * 2.9 + isOffice * 3.8;
-        float colW = isConcrete * 1.9 + isResi * 1.25 + isOffice * 1.5;
+        // Variety below applies to generated buildings only (they carry wall data); the hand-modelled signature
+        // towers share this shader and keep their original look.
+        float generated = step(0.5, vWall.y);
+        // Per building: slightly different floor heights and panel widths, so neighbours don't share one grid.
+        float floorH = (isConcrete * 3.0 + isResi * 2.9 + isOffice * 3.8) * mix(1.0, 0.93 + 0.14 * hash12(vec2(vSeed * 17.0, 3.0)), generated);
+        float colW = (isConcrete * 1.9 + isResi * 1.25 + isOffice * 1.5) * mix(1.0, 0.85 + 0.3 * hash12(vec2(vSeed * 29.0, 5.0)), generated);
+        // Dark reflective glass: some office and condo towers read as near-black mirrors that pick up the sky
+        // (the western afterglow on walls that face it) instead of showing a window grid.
+        float darkGlass = generated * (1.0 - isConcrete) * step(hash12(vec2(vSeed * 43.0, 9.0)), mix(0.22, 0.45, isOffice));
         // Fit whole window columns to each wall (no windows sliced at the corners); curved hand-built
         // towers have no wall data and use the world grid.
         float wallLen = vWall.y;
@@ -191,13 +198,21 @@ export function createFacadeMaterial(uniforms) {
         // Each wall gets its own pattern (shift by whole units so rooms still line up with windows).
         cell.x += floor(vWall.z * 997.0) * unitW * 7.0;
         vec2 unit = vec2(floor(cell.x / unitW), cell.y);
-        float litShare = mix(0.20, 0.35, hash12(vec2(vSeed * 13.1, 7.7)));
+        // Occupancy per building: most moderately lit, some nearly dark (empty offices, unsold units), some busy.
+        // Mirror-glass towers show less of their interior.
+        float occ = hash12(vec2(vSeed * 13.1, 7.7));
+        float litShare = occ < 0.18 ? mix(0.03, 0.1, occ / 0.18) : occ < 0.82 ? mix(0.18, 0.38, (occ - 0.18) / 0.64) : mix(0.5, 0.7, (occ - 0.82) / 0.18);
+        litShare *= mix(1.0, 0.55, darkGlass);
+        litShare = mix(mix(0.20, 0.35, occ), litShare, generated);
         float r1 = hash12(unit + vSeed * 117.0);
         float r2 = hash12(cell * 1.7 + vSeed * 53.0);   // per window
         float r3 = hash12(unit * 2.3 + vSeed * 29.0);
         float floorRand = hash12(vec2(cell.y, vSeed * 71.0));
-        float lit = step(r1, litShare);
-        lit = mix(lit, step(floorRand, 0.22) * step(0.2, r2), isOffice); // office: some floors on, a few panels off
+        // Floors differ too: some busier, some quiet, instead of an even sprinkle over the whole facade.
+        float floorBusy = mix(1.0, mix(0.45, 1.55, hash12(vec2(cell.y * 3.7 + 1.0, vSeed * 59.0))), generated);
+        float officeFloors = mix(0.22, litShare * 0.8, generated);
+        float lit = step(r1, litShare * floorBusy);
+        lit = mix(lit, step(floorRand, officeFloors) * step(0.2, r2), isOffice); // office: some floors on, a few panels off
         float ground = 1.0 - step(1.0, cell.y);
         lit = max(lit, ground * step(r1, 0.6));
         lit *= step(vWorld.y + floorH * 0.9, vTop) + ground;
@@ -256,7 +271,12 @@ export function createFacadeMaterial(uniforms) {
         skyAmb *= 0.85 + 0.2 * smoothstep(0.0, 150.0, vWorld.y);
         float streetWash = exp(-max(vWorld.y, 0.0) / 9.0) * (0.55 + 0.45 * sin(u * 0.19 + vSeed * 40.0));
         vec3 washCol = vec3(1.0, 0.62, 0.3) * streetWash;
-        vec3 wallLit = concrete * skyAmb * vec3(0.55, 0.62, 0.85) + concrete * westWarm * westFacing * 0.2 + concrete * washCol * 0.9;
+        // Afterglow on west-facing walls: strongest at grazing angles (the lit edge of a tower seen side-on)
+        // and higher up, where the low western sky isn't blocked by the neighbours.
+        float grazing = 1.0 - max(dot(n, V), 0.0);
+        float high = smoothstep(8.0, 140.0, vWorld.y);
+        float glowEdge = westFacing * (0.35 + 0.65 * grazing * grazing) * (0.3 + 0.7 * high);
+        vec3 wallLit = concrete * skyAmb * vec3(0.55, 0.62, 0.85) + concrete * westWarm * glowEdge * 0.75 + concrete * washCol * 0.9;
         // Concrete: a lighter sill under each window and a floor line.
         float sill = isConcrete * m.x * step(lo.y - 0.05, f.y) * (1.0 - step(lo.y, f.y));
         float floorLine = isConcrete * (1.0 - smoothstep(0.03 - aa.y, 0.05 + aa.y, f.y));
@@ -265,27 +285,34 @@ export function createFacadeMaterial(uniforms) {
 
         // Glass: each pane sits at a slightly different angle, so reflections break up pane by pane.
         vec2 pr = vec2(hash12(cell * 3.1 + vSeed * 7.0), hash12(cell * 5.7 + vSeed * 3.0)) - 0.5;
-        vec3 np = normalize(n + (T * pr.x * 0.09 + vec3(0.0, pr.y * 0.06, 0.0)) * detail);
+        vec3 np = normalize(n + (T * pr.x * 0.09 + vec3(0.0, pr.y * 0.06, 0.0)) * detail * mix(1.0, 0.3, darkGlass)); // mirror glass: flatter panes
         vec3 R = reflect(-V, np);
         R.y = abs(R.y) * 0.9 + 0.02;
         float fres = 0.04 + 0.96 * pow(1.0 - max(dot(np, V), 0.0), 5.0);
         // Glass type per building: Vancouver's green-teal condo glass, blue, bronze, silver or dark smoked.
         float gk = hash12(vec2(vSeed * 23.0, 4.0));
         vec3 glassTint = gk < 0.32 ? vec3(0.42, 0.98, 0.85) : gk < 0.52 ? vec3(0.42, 0.7, 1.15) : gk < 0.66 ? vec3(1.15, 0.75, 0.45) : gk < 0.86 ? vec3(0.88, 0.9, 0.94) : vec3(0.5, 0.52, 0.56);
-        vec3 tint = vec3(0.009, 0.014, 0.018) * glassTint * 1.3;
-        vec3 glassCol = tint + skyColor(R) * mix(0.25, 0.9, fres) * glassTint;
+        glassTint = mix(glassTint, gk < 0.5 ? vec3(0.62, 0.66, 0.74) : vec3(0.78, 0.68, 0.58), darkGlass); // smoke-grey or bronze mirror
+        vec3 tint = vec3(0.009, 0.014, 0.018) * glassTint * mix(1.3, 0.35, darkGlass);
+        vec3 glassCol = tint + skyColor(R) * mix(0.25, 0.9, fres) * glassTint * mix(1.0, 1.25, darkGlass);
         // The city reflected in the glass: a faint band of distant lit windows near the horizon.
         float az = atan(R.x, R.z);
         float cityBand = (1.0 - smoothstep(0.0, 0.12, R.y)) * step(0.9, hash12(floor(vec2(az * 420.0, R.y * 900.0))));
         glassCol += vec3(1.0, 0.7, 0.4) * cityBand * 0.14 * detail * mix(0.4, 1.0, fres);
+        // Soft (blurred) reflection of the western afterglow on glass that faces partly west, strongest on the
+        // mirror-glass towers and at grazing angles.
+        glassCol += westWarm * glowEdge * mix(0.012, 0.09, darkGlass);
 
         // Mullions/slab edges per building: white, black, bronze or grey metal; office spandrels take the
         // glass colour.
         float mk = hash12(vec2(vSeed * 37.0, 6.0));
         vec3 metal = mk < 0.3 ? vec3(0.07, 0.072, 0.078) : mk < 0.55 ? vec3(0.012, 0.013, 0.015) : mk < 0.72 ? vec3(0.04, 0.028, 0.017) : vec3(0.03, 0.032, 0.036);
         metal *= skyAmb * vec3(0.75, 0.8, 0.95);
+        metal += westWarm * glowEdge * 0.03; // metal fins and frames catch a warm edge
         vec3 frameCol = mix(wallLit, metal, 1.0 - isConcrete);
         frameCol = mix(frameCol, vec3(0.011) * glassTint * 1.2 + metal * 0.3, isOffice); // spandrels
+        // Mirror-glass towers: spandrels are the same glass, so the facade reads as one reflective skin.
+        frameCol = mix(frameCol, glassCol * 0.85 + metal * 0.15, darkGlass * (1.0 - parapet));
         frameCol += vec3(0.02, 0.016, 0.012) * washCol * (1.0 - isConcrete);
         // Parapet cap and corner trim: a little lighter (metal / precast), catching the sky.
         frameCol = mix(frameCol, wallLit * 1.15 + vec3(0.004, 0.005, 0.008), max(parapet, corner * (1.0 - isConcrete)) * (1.0 - isConcrete * 0.6));
@@ -295,7 +322,7 @@ export function createFacadeMaterial(uniforms) {
         slabCol *= ao;
 
         // Far away: average instead of aliasing.
-        float avgLit = mix(litShare, 0.27, isOffice);
+        float avgLit = mix(litShare, mix(0.27, officeFloors * 0.8, generated), isOffice);
         vec3 avgLamp = mix(mix(k3000, k4000, style), officeCol, isOffice) * 0.62 * uWindowIntensity * avgLit;
         // Distant facades read as dark walls with a glow of windows, not pale blocks: darken the wall part.
         vec3 far = mix(frameCol * 0.55, glassCol * (1.0 - avgLit * 0.85) + avgLamp, windowArea);
