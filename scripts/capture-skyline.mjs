@@ -72,12 +72,13 @@ try {
       }
     }
     if (!done) { console.error(`${name}: timed out`); continue; }
-    const result = JSON.parse((await evaluate('JSON.stringify({ error: window.__result.error, png: window.__result.png, tiers: window.__result.tiers, stats: window.__result.stats, timings: window.__result.timings, log: window.__result.log })')) ?? '{}');
+    const result = JSON.parse((await evaluate('JSON.stringify({ error: window.__result.error, png: window.__result.png, tiers: window.__result.tiers, stats: window.__result.stats, timings: window.__result.timings, bench: window.__result.bench, log: window.__result.log })')) ?? '{}');
     if (result.error || !result.png) { console.error(`${name}: ${result.error ?? 'no image'}\n${(result.log ?? []).join('\n')}`); continue; }
     writeFileSync(join(outDir, `${name}.png`), Buffer.from(result.png.split(',')[1], 'base64'));
     const t = result.timings ?? {};
     if (result.tiers) console.log('tiers:', JSON.stringify(result.tiers));
     if (process.env.LOGJSON) console.log('LOG', JSON.stringify(result.log));
+    if (result.bench) console.log(`bench ${name}: ${JSON.stringify(result.bench)}`); // &bench=1: ms per frame, with and without each pass
     if (process.env.STATS) { const { bridge, boats, ...rest } = result.stats ?? {}; console.log(JSON.stringify(rest)); }
     console.log(`${name}: ok in ${((Date.now() - t0) / 1000).toFixed(1)}s (scene build ${Math.round(t.total ?? 0)} ms)${result.log?.length ? ` | log: ${result.log.slice(0, 3).join(' / ')}` : ''}`);
   }

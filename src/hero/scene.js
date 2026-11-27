@@ -21,7 +21,7 @@ import { createBridge } from './bridge.js';
 import { createViaducts } from './viaduct.js';
 import { createSkytrain } from './skytrain.js';
 import { createSeaplanes } from './seaplanes.js';
-import { createBoats, createAquabus } from './boats.js';
+import { createBoats, createAquabus, createDrifters } from './boats.js';
 import { createComposer } from './post.js';
 
 /**
@@ -52,9 +52,9 @@ function decodeSkytrain(raw) {
 }
 
 export const TIERS = {
-  high: { pixelRatio: 2, reflectionScale: 0.5, bloomScale: 0.5, bloom: true, lightShare: 1, samples: 0, fxaa: true },
-  medium: { pixelRatio: 1.5, reflectionScale: 0.25, bloomScale: 0.25, bloom: true, lightShare: 0.6, samples: 0, fxaa: true },
-  low: { pixelRatio: 1, reflectionScale: 0.25, bloomScale: 0.25, bloom: false, lightShare: 0.35, samples: 0, fxaa: false },
+  high: { pixelRatio: 2, reflectionScale: 0.5, streakTaps: 8, bloomScale: 0.5, bloom: true, lightShare: 1, samples: 0, fxaa: true },
+  medium: { pixelRatio: 1.5, reflectionScale: 0.25, streakTaps: 6, bloomScale: 0.25, bloom: true, lightShare: 0.6, samples: 0, fxaa: true },
+  low: { pixelRatio: 1, reflectionScale: 0.25, streakTaps: 4, bloomScale: 0.25, bloom: false, lightShare: 0.35, samples: 0, fxaa: false },
 };
 export const TIER_ORDER = ['high', 'medium', 'low'];
 
@@ -65,11 +65,11 @@ export const TURN_BEARING = { desktop: 38, phone: 56 };
 
 const SCENE_DETAIL = {
   desktop: { lod: { farDistance: 1300, farMinHeight: 10 }, demStride: 1, northShoreLights: 2600, boatDistance: 2400, lampSpacing: 34, carSpacing: [18, 48], maxTrees: 4000, pathLampDistance: 1600, planeScale: 1.6,
-    openBoats: 18, ferries: 4,
+    openBoats: 18, ferries: 4, drifters: 4,
     southBank: { furnitureDistance: 900, parkedDistance: 850, maxParked: 700, streetTrees: 1400, peopleDistance: 480, walkers: 80, cyclists: 18 },
     village: { balconyDistance: 700, balconyChance: 0.55, solar: true, maxTriangles: 260000 } },
   phone: { lod: { farDistance: 900, farMinHeight: 14 }, demStride: 2, northShoreLights: 1400, boatDistance: 1600, lampSpacing: 52, carSpacing: [30, 70], maxTrees: 1500, pathLampDistance: 1000, planeScale: 2.8,
-    openBoats: 9, ferries: 3,
+    openBoats: 9, ferries: 3, drifters: 3,
     southBank: { furnitureDistance: 500, parkedDistance: 450, maxParked: 180, streetTrees: 400, peopleDistance: 320, walkers: 26, cyclists: 7 },
     village: { balconyDistance: 380, balconyChance: 0.4, solar: true, maxTriangles: 110000 } },
 };
@@ -276,7 +276,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
   if (tower) anchors.tower = [tower.c[0], tower.h + 6, -tower.c[1]];
 
   await breathe();
-  const water = createWater(uniforms, data.waterMask, { reflectionScale: q.reflectionScale, width, height, pixelRatio: renderer.getPixelRatio() });
+  const water = createWater(uniforms, data.waterMask, { reflectionScale: q.reflectionScale, streakTaps: q.streakTaps, width, height, pixelRatio: renderer.getPixelRatio() });
   scene.add(water);
   scene.add(createGround(uniforms));
   // The south bank rises toward Broadway: a real terrain surface; everything on the land follows it via heightAt.
@@ -448,6 +448,38 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     animators.push(ab.update);
   });
 
+  // Small boats under way (added 2026-11-27): a few lit cruisers and runabouts drifting very slowly (0.35–0.6 m/s)
+  // round small elliptical loops in the open water in front of both framings, clear of the shore, bridges, the
+  // Aquabus routes and the anchored boats. Fixed seed, so they start in the same places every visit.
+  const drifterLoops = [];
+  {
+    let ds = 29;
+    const dr = () => ((ds = (ds * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const segDist = (x, y, a, b) => {
+      const dx = b.x - a.x, dy = b.y - a.y, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(x - a.x - dx * t, y - a.y - dy * t);
+    };
+    for (let tries = 0; tries < 2000 && drifterLoops.length < detail.drifters; tries++) {
+      const b = THREE.MathUtils.degToRad(320 + (dr() - 0.5) * 64), d = 235 + dr() * 380; // ≥235 m: inside the default desktop frame (its lower edge meets the water ~230 m out)
+      const c = [CAMERA_POSITION[0] + Math.sin(b) * d, CAMERA_POSITION[1] + Math.cos(b) * d];
+      const rx = 18 + dr() * 22, ry = 7 + dr() * 8, rot = dr() * Math.PI;
+      const ring = Array.from({ length: 20 }, (_, k) => {
+        const t = (k / 20) * Math.PI * 2, ex = rx * Math.cos(t), ey = ry * Math.sin(t);
+        return [c[0] + ex * Math.cos(rot) - ey * Math.sin(rot), c[1] + ex * Math.sin(rot) + ey * Math.cos(rot)];
+      });
+      const ok = ring.every(([x, y]) => isWater(x, y) && [0, 1, 2, 3, 4, 5].every((k) => isWater(x + Math.cos(k * 1.047) * 15, y + Math.sin(k * 1.047) * 15))
+        && bridgeDistance(x, y) > 60 && ferrySpots.every((f) => segDist(x, y, f.from, f.to) > 22)
+        && openBoats.every((o) => Math.hypot(o.x - x, o.y - y) > 25))
+        && drifterLoops.every((o) => Math.hypot(o.c[0] - c[0], o.c[1] - c[1]) > o.rx + rx + 20);
+      if (!ok) continue;
+      const type = dr() < 0.6 ? 'cruiser' : 'runabout';
+      drifterLoops.push({ c, rx, ry, rot, speed: 0.35 + dr() * 0.25, dir: dr() < 0.5 ? 1 : -1, phase: dr(), length: type === 'cruiser' ? 9 + dr() * 3 : 6.5 + dr() * 1.5, type });
+    }
+  }
+  const drifters = createDrifters(drifterLoops, uniforms);
+  scene.add(drifters.group);
+  animators.push(drifters.update);
+
   await breathe();
   const dem = terrain === 'dem' ? data.terrain : null;
   const vScale = dem ? MOUNTAIN_EXAGGERATION : 1;
@@ -531,7 +563,7 @@ export async function createSkylineScene({ canvas, width, height, layout = 'desk
     look,
     stats: {
       ...stats, culled, lights: lights.length, bridge: bridgeStats, boats: boats.stats, seawall: seawall.stats,
-      ferries: ferrySpots.length, streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, openBoats: openBoats.map((b) => [Math.round(b.x), Math.round(b.y), b.sail ? 'sail' : 'motor']), granville: granville.stats, village: village.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
+      ferries: ferrySpots.length, drifters: drifterLoops.map((l) => [Math.round(l.c[0]), Math.round(l.c[1]), l.type]), streets: streets.stats, skytrain: skytrainStats, waterfront: waterfront.stats, signatures: data.signatures.length, openBoats: openBoats.map((b) => [Math.round(b.x), Math.round(b.y), b.sail ? 'sail' : 'motor']), granville: granville.stats, village: village.stats, southBank: southBank.stats, pixelRatio: renderer.getPixelRatio(), tier: tierName,
     },
     timings,
     render: (time) => {

@@ -16,7 +16,7 @@ export function createMaskTexture(mask) {
   return tex;
 }
 
-export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 1600, height = 900, pixelRatio = 1 } = {}) {
+export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 1600, height = 900, pixelRatio = 1, streakTaps = 8 } = {}) {
   // Reflector derives the mirror plane from the mesh's transform (local +Z = normal), so the
   // plane geometry stays in XY and the mesh itself is rotated flat.
   const geometry = new THREE.PlaneGeometry(14000, 8000);
@@ -45,6 +45,7 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
       }
     `,
     fragmentShader: /* glsl */ `
+      #define STREAK_TAPS ${Math.max(2, Math.round(streakTaps))}
       ${skyGlsl}
       ${hashGlsl}
       ${fogGlsl}
@@ -119,6 +120,32 @@ export function createWater(uniforms, mask, { reflectionScale = 0.5, width = 160
 
         vec3 deep = vec3(0.003, 0.007, 0.013);
         vec3 col = deep + refl * mix(0.35, 0.85, fres) * mix(1.0, 0.6, smoothstep(1500.0, 3500.0, dist));
+
+        // Long light streaks: rippled water reflects a bright light over a wide spread of slopes, so each light
+        // stretches into a broken column toward the viewer. A planar reflection is sampled at the pixel's own
+        // screen position, so looking further up the reflection (toward the light's mirror image) pulls it down
+        // over this pixel. Only bright samples count (windows, lamps, BC Place's ring, the afterglow), so dark
+        // facades don't smear. Shorter far away, so the North Shore lights don't become a glowing wall.
+        float sLen = 0.34 * clamp(380.0 / dist, 0.15, 1.0);
+        float jitter = hash12(gl_FragCoord.xy); // dither between taps (no ghost copies); fixed, so it doesn't fizz
+        vec3 hi = vec3(0.0);
+        float hsum = 0.0;
+        for (int k = 0; k < STREAK_TAPS; k++) {
+          float fk = (float(k) + jitter) / float(STREAK_TAPS);
+          // Sideways sway that changes along the column and slowly over time: wavy, not ruler-straight.
+          float sway = sin(vWorld.z * 0.22 + fk * 7.0 + uTime * 0.5) * 0.0035 * wobble + slope.x * 0.03;
+          vec3 smp = texture2DProj(tDiffuse, uv + vec4(sway * uv.w, fk * sLen * uv.w, 0.0, 0.0)).rgb;
+          float l = dot(smp, vec3(0.299, 0.587, 0.114));
+          float wk = 1.0 - 0.55 * fk; // fades with distance from the light
+          hi += smp * smoothstep(0.12, 0.6, l) * wk;
+          hsum += wk;
+        }
+        hi /= hsum;
+        // Break the columns into shimmering bands: ripple crests that catch the light, drifting slowly. When
+        // a band is smaller than a pixel, use its average.
+        float crest = sin(dot(local, vec2(0.18, 1.0)) * 1.25 + slope.y * 30.0 + uTime * 0.7);
+        crest = mix(0.08 + 0.92 * smoothstep(0.35, 0.95, crest), 0.3, smoothstep(0.4, 1.6, pixelMetres));
+        col += hi * crest * 0.85 * mix(1.0, 0.5, smoothstep(1200.0, 3000.0, dist));
         // Glints: tiny shimmering highlights where ripples catch a bright reflection.
         float lum = dot(refl, vec3(0.299, 0.587, 0.114));
         vec2 gp = local * 2.2 + vec2(uTime * 0.7, -uTime * 0.45);
