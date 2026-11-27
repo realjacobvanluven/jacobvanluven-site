@@ -6,16 +6,13 @@
  * Out: { chunks: [{ position, normal, seed, kind, top }], stats }  (typed arrays, transferred)
  *
  * Facade kinds: 0 concrete (punched windows), 1 residential glass (balcony bands), 2 office curtain wall.
- * Taller towers get some variety on top: stepped (setback) crowns or angled roofs. Larger flat roofs get a
- * few mechanical boxes (kind 3: plain walls, no windows).
+ * Roofs follow roofPlan() (roof-plan.js): stepped setbacks, slanted tops, mechanical penthouses, antenna
+ * masts and small rooftop units (kind 3: plain walls, no windows), all chosen from each building's ID.
  */
 
-const CHUNK = 400;
+import { roofPlan, buildingId, rng } from './roof-plan.js';
 
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-}
+const CHUNK = 400;
 
 function signedArea(r) {
   let a = 0;
@@ -95,16 +92,31 @@ function insideRing([x, y], r) {
   return hit;
 }
 
+/** Direction of the footprint's longest edge (unit vector), so rooftop units line up with the walls. */
+function mainAxis(ring) {
+  let best = 0, ux = 1, uy = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x0, y0] = ring[i], [x1, y1] = ring[(i + 1) % ring.length];
+    const l = Math.hypot(x1 - x0, y1 - y0);
+    if (l > best) { best = l; ux = (x1 - x0) / l; uy = (y1 - y0) / l; }
+  }
+  return [ux, uy];
+}
+
+const scaleRing = (ring, [cx, cy], k) => ring.map(([x, y]) => [cx + (x - cx) * k, cy + (y - cy) * k]);
+
 function build({ buildings, camera, lod }) {
   const { farDistance = 1300, farMinHeight = 10 } = lod ?? {};
-  const random = rng(20241121);
   const chunks = new Map();
-  const stats = { kept: 0, dropped: 0, setback: 0, angled: 0 };
+  const stats = { kept: 0, dropped: 0, setback: 0, angled: 0, penthouse: 0, mast: 0, rooftop: 0 };
 
   for (const b of buildings) {
-    const seed = random(), r1 = random(), r2 = random(), r3 = random();
     if (b.h - b.base < 1.5) { stats.dropped++; continue; }
     if (Math.hypot(b.c[0] - camera[0], b.c[1] - camera[1]) > farDistance && b.h < farMinHeight) { stats.dropped++; continue; }
+    // Everything random about a building comes from its ID (see roof-plan.js).
+    const plan = roofPlan(b);
+    const random = rng(buildingId(b) * 31 + 7);
+    const seed = plan.seed, r1 = random();
     const kind = b.h > 60 ? (r1 < 0.55 ? 1 : r1 < 0.82 ? 2 : 0)
       : b.h > 25 ? (r1 < 0.35 ? 1 : r1 < 0.5 ? 2 : 0)
       : (r1 < 0.2 ? 2 : 0);
@@ -113,39 +125,61 @@ function build({ buildings, camera, lod }) {
     const ch = chunks.get(key);
     stats.kept++;
 
-    const tall = b.h > 55 && kind !== 0 && b.ring.length <= 24;
-    if (tall && r2 < 0.3) {
-      // Stepped crown: main shaft to ~90%, then an inset top section.
-      const h0 = b.base + (b.h - b.base) * (0.86 + r3 * 0.06);
-      pushPrism(ch, b.ring, b.base, () => h0, h0, seed, kind);
-      const [cx, cy] = b.c, k = 0.72 + r3 * 0.12;
-      const inner = b.ring.map(([x, y]) => [cx + (x - cx) * k, cy + (y - cy) * k]);
-      pushPrism(ch, inner, h0, () => b.h, b.h, seed, kind);
+    const height = b.h - b.base;
+    let topRing = b.ring, topScale = 1;
+    if (plan.type === 'stepped') {
+      // Main shaft, then each tier inset from the one below.
+      const levels = plan.tiers.map((t) => b.base + height * t.start).concat(b.h);
+      pushPrism(ch, b.ring, b.base, () => levels[0], levels[0], seed, kind);
+      plan.tiers.forEach((t, k) => {
+        const ring = scaleRing(b.ring, b.c, t.scale);
+        pushPrism(ch, ring, levels[k], () => levels[k + 1], levels[k + 1], seed, kind);
+        topRing = ring; topScale = t.scale;
+      });
       stats.setback++;
-    } else if (tall && r2 < 0.45) {
-      // Angled crown: roof slopes across the footprint along a random direction.
-      const ang = r3 * Math.PI * 2, ux = Math.cos(ang), uy = Math.sin(ang);
+    } else if (plan.type === 'slanted') {
+      // Roof slopes across the footprint along a direction picked per building.
+      const ux = Math.cos(plan.slant.angle), uy = Math.sin(plan.slant.angle);
       const proj = b.ring.map(([x, y]) => x * ux + y * uy);
       const p0 = Math.min(...proj), p1 = Math.max(...proj);
-      const drop = Math.min(0.12 * b.h, 14);
-      pushPrism(ch, b.ring, b.base, ([x, y]) => b.h - drop * ((x * ux + y * uy - p0) / (p1 - p0 || 1)), b.h, seed, kind);
+      pushPrism(ch, b.ring, b.base, ([x, y]) => b.h - plan.slant.drop * ((x * ux + y * uy - p0) / (p1 - p0 || 1)), b.h, seed, kind);
       stats.angled++;
     } else {
       pushPrism(ch, b.ring, b.base, () => b.h, b.h, seed, kind);
-      // Rooftop equipment on bigger flat roofs.
-      const area = Math.abs(signedArea(b.ring));
-      if (b.h > 15 && area > 250) {
-        const xs = b.ring.map((p) => p[0]), ys = b.ring.map((p) => p[1]);
-        const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...ys) - Math.min(...ys);
-        const n = 1 + Math.floor(r3 * 3);
-        for (let k = 0; k < n; k++) {
-          const ox = b.c[0] + (random() - 0.5) * w * 0.5, oy = b.c[1] + (random() - 0.5) * d * 0.5;
-          const bw = 2.5 + random() * 5, bd = 2.5 + random() * 5, bh = 1.8 + random() * 2.6;
-          if (!insideRing([ox, oy], b.ring)) continue;
-          const box = [[ox - bw / 2, oy - bd / 2], [ox + bw / 2, oy - bd / 2], [ox + bw / 2, oy + bd / 2], [ox - bw / 2, oy + bd / 2]];
-          pushPrism(ch, box, b.h, () => b.h + bh, b.h + bh, seed, 3);
-          stats.rooftop = (stats.rooftop ?? 0) + 1;
-        }
+    }
+
+    // Mechanical penthouse (lift overrun / plant room): the footprint shrunk around its centre.
+    if (plan.penthouse) {
+      const k = Math.min(plan.penthouse.scale, topScale * 0.7);
+      pushPrism(ch, scaleRing(b.ring, b.c, k), b.h, () => b.h + plan.penthouse.h, b.h + plan.penthouse.h, seed, 3);
+      stats.penthouse++;
+    }
+    // Antenna mast: a thin square post on a small base; the aviation light sits on its tip.
+    if (plan.mast) {
+      const top = b.h + (plan.penthouse?.h ?? 0);
+      const [cx, cy] = b.c;
+      const sq = (s) => [[cx - s, cy - s], [cx + s, cy - s], [cx + s, cy + s], [cx - s, cy + s]];
+      pushPrism(ch, sq(0.9), top, () => top + 1.2, top + 1.2, seed, 3);
+      pushPrism(ch, sq(0.28), top + 1.2, () => plan.crownTop, plan.crownTop, seed, 3);
+      stats.mast++;
+    }
+    // Small rooftop units (HVAC, cooling towers), lined up with the building's long axis. Low roofs far away
+    // can't be seen from the camera height, so they skip them.
+    const far = Math.hypot(b.c[0] - camera[0], b.c[1] - camera[1]) > farDistance * 0.6;
+    if (plan.boxes && !(far && height <= 25)) {
+      const [ax, ay] = mainAxis(topRing), bx = -ay, by = ax;
+      const pa = topRing.map(([x, y]) => (x - b.c[0]) * ax + (y - b.c[1]) * ay);
+      const pb = topRing.map(([x, y]) => (x - b.c[0]) * bx + (y - b.c[1]) * by);
+      const w = Math.max(...pa) - Math.min(...pa), d = Math.max(...pb) - Math.min(...pb);
+      for (let k = 0; k < plan.boxes; k++) {
+        const oa = (random() - 0.5) * w * 0.55, ob = (random() - 0.5) * d * 0.55;
+        const hw = Math.min(1.2 + random() * 2.5, w * 0.2), hd = Math.min(1.2 + random() * 2.5, d * 0.2), bh = 1.6 + random() * 2.4;
+        if (hw < 0.6 || hd < 0.6) continue;
+        const ox = b.c[0] + oa * ax + ob * bx, oy = b.c[1] + oa * ay + ob * by;
+        const box = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => [ox + u * ax + v * bx, oy + u * ay + v * by]);
+        if (!box.every((p) => insideRing(p, topRing))) continue;
+        pushPrism(ch, box, b.h, () => b.h + bh, b.h + bh, seed, 3);
+        stats.rooftop++;
       }
     }
   }

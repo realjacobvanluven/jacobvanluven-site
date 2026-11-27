@@ -37,10 +37,15 @@ export function createComposer(renderer, scene, camera, { width, height, pixelRa
   const renderPass = new RenderPass(scene, camera);
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(width * pixelRatio * bloomScale, height * pixelRatio * bloomScale),
-    bloom.strength ?? 0.32,
-    bloom.radius ?? 0.45,
-    bloom.threshold ?? 1.4,
+    bloom.strength ?? 0.24,
+    bloom.radius ?? 0.55,
+    bloom.threshold ?? 0.85,
   );
+  // Understated, not neon (2026-11-27): low strength, wide soft radius, threshold 0.85 (HDR, before tone mapping) with a
+  // soft knee, so brightness fades into the bloom over threshold … threshold + smoothWidth instead of switching on at a hard
+  // cut (the pass default smoothWidth is 0.01, which made windows near the threshold pop). What glows: the brighter lit
+  // windows, streetlights, aviation and mast lights, BC Place's ring, and faintly the brightest part of the sunset horizon.
+  bloomPass.highPassUniforms.smoothWidth.value = bloom.smoothWidth ?? 0.45;
   // UnrealBloomPass always blurs at half the size it's given; scale that so phones can bloom at a quarter.
   const bloomSetSize = bloomPass.setSize.bind(bloomPass);
   bloomPass.scale = bloomScale;

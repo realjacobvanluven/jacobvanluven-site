@@ -19,8 +19,8 @@ uniform vec3 uSunDir;
 vec3 skyColor(vec3 d) {
   float y = d.y;
   float h = max(y, 0.0);
-  vec3 zenith = vec3(0.003, 0.008, 0.042);
-  vec3 mid = vec3(0.007, 0.022, 0.095);
+  vec3 zenith = vec3(0.002, 0.009, 0.046);
+  vec3 mid = vec3(0.004, 0.024, 0.105); // a touch of green keeps ACES from pushing the blue to violet
   vec3 horizon = vec3(0.028, 0.050, 0.135);
   vec3 c = mix(horizon, mid, smoothstep(0.0, 0.16, h));
   c = mix(c, zenith, smoothstep(0.12, 0.75, h));
@@ -29,10 +29,22 @@ vec3 skyColor(vec3 d) {
   vec2 dh = normalize(d.xz + 1e-6);
   vec2 sh = normalize(uSunDir.xz);
   float toward = clamp(dot(dh, sh) * 0.5 + 0.5, 0.0, 1.0); // clamp: pow() of a tiny negative is NaN
-  float band = exp(-h * 11.0);
-  // Amber-orange, hugging the horizon; deep navy stays overhead.
-  c += vec3(1.00, 0.50, 0.12) * pow(toward, 5.0) * exp(-h * 16.0) * 0.8;
-  c += vec3(1.00, 0.60, 0.22) * pow(toward, 3.0) * exp(-h * 12.0) * 0.06;
+  // Angular falloff from the sun's bearing: strong on the left of frame (sun ~22° left of the desktop view
+  // centre), mostly gone by the right edge, so the warmth reads as coming from the west.
+  float cosA = max(dot(dh, sh), 0.0);
+  float core = pow(cosA, 8.0);   // ~0.6 at 20°, ~0.12 at 40°, ~0.004 at 60°
+  // Afterglow: a bright amber-yellow line right on the horizon and an orange band above it that replaces
+  // the blue (adding orange on top of blue reads as mauve), then a pale-gold fringe that hands over to
+  // the blue. Deep navy stays overhead.
+  // The visible sky only reaches ~12° up at the top of the frame, so the glow has to stay low for the
+  // top of the frame to read as navy.
+  float band = core * exp(-h * 24.0);
+  c *= 1.0 - clamp(band * 1.5, 0.0, 1.0) * 0.92;
+  c += vec3(1.00, 0.55, 0.16) * core * exp(-h * 45.0) * 0.9;
+  c += vec3(1.00, 0.45, 0.10) * band * 1.1;
+  c += vec3(0.60, 0.50, 0.30) * core * exp(-h * 11.0) * 0.04;
+  // A trace of the old broad term keeps the east horizon from going dead cold.
+  c += vec3(1.00, 0.60, 0.22) * pow(toward, 3.0) * exp(-h * 12.0) * 0.03;
 
   // Light pollution: a faint warm dome low over downtown (north-west of the camera).
   vec2 cityDir = normalize(vec2(-0.5, -0.87)); // world xz toward bearing ~330°
@@ -42,7 +54,7 @@ vec3 skyColor(vec3 d) {
   if (y < 0.0) {
     // Below the horizon (only seen in reflections and haze): darker, still tinted by the glow.
     c = mix(horizon * 0.55, vec3(0.012, 0.016, 0.03), smoothstep(0.0, 0.25, -y))
-      + vec3(1.0, 0.38, 0.10) * pow(toward, 7.0) * 0.25 * exp(y * 18.0);
+      + vec3(1.0, 0.40, 0.10) * core * 0.55 * exp(y * 14.0);
   }
   return c;
 }
@@ -69,7 +81,7 @@ vec3 skyWithClouds(vec3 d, float time) {
   // Fade into the haze toward the horizon.
   cover *= smoothstep(0.02, 0.12, d.y) * 0.75;
   vec2 dh = normalize(d.xz + 1e-6);
-  float west = pow(clamp(dot(dh, normalize(uSunDir.xz)) * 0.5 + 0.5, 0.0, 1.0), 4.0);
+  float west = pow(max(dot(dh, normalize(uSunDir.xz)), 0.0), 4.0) * 1.6;
   float city = pow(clamp(dot(dh, normalize(vec2(-0.5, -0.87))), 0.0, 1.0), 1.5);
   vec3 cloudCol = vec3(0.012, 0.016, 0.035)               // unlit body
     + vec3(1.0, 0.45, 0.15) * west * 0.10 * exp(-d.y * 4.0) // afterglow on the western clouds

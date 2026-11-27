@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { roofPlan } from './roof-plan.js';
 
 /**
  * Small light sources (streetlights, distant houses, aviation lights, dome lights, beacon) as one
@@ -102,7 +103,8 @@ export function aviationLights(buildings, { minHeight = 105, max = 30 } = {}) {
     .filter((b) => b.h >= minHeight)
     .sort((a, b) => b.h - a.h)
     .slice(0, max)
-    .map((b, i) => ({ p: [b.c[0], b.h + 1.5, -b.c[1]], color: [9, 0.25, 0.12], size: 1.4, blink: (i * 0.37) % 1 }));
+    // On top of any penthouse or mast (roof-plan.js).
+    .map((b, i) => ({ p: [b.c[0], roofPlan(b).crownTop + 1.5, -b.c[1]], color: [9, 0.25, 0.12], size: 1.4, blink: (i * 0.37) % 1 }));
 }
 
 export function distantLights(points, rand = Math.random) {

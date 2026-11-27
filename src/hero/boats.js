@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { skyGlsl, hashGlsl, fogGlsl } from './shaders.js';
+import { createLightPoints } from './lights.js';
 
 /**
  * Marinas and boats on False Creek: dock floats (from OSM), moored boats placed along them by the data
@@ -420,4 +421,68 @@ export function createAquabus({ from, to, speed = 4.5, dwell = 6, phase = 0 }, e
   }
   update(0);
   return { group, update, lights: [] };
+}
+
+/**
+ * Small boats under way: a few cruisers and runabouts drifting very slowly round closed loops of open water
+ * (`loops`: [{ c: [x, y], rx, ry, rot, speed, dir, phase, length, type }], local metres, speed in m/s), with
+ * navigation lights (red port, green starboard, white masthead and stern) and a lit cabin. They are real
+ * geometry, so the water reflects them and streaks their lights. Call update(time) every frame.
+ */
+export function createDrifters(loops, uniforms) {
+  const group = new THREE.Group();
+  const material = boatMaterial(uniforms);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+  const meshes = [];
+  for (const type of ['runabout', 'cruiser']) {
+    const these = loops.filter((l) => l.type === type);
+    if (!these.length) continue;
+    const geo = boatModel(type);
+    const n = these.length;
+    geo.setAttribute('aHull', new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(0.8), 3));
+    geo.setAttribute('aStripe', new THREE.InstancedBufferAttribute(new Float32Array(these.flatMap((_, i) => (i % 2 ? [0.05, 0.08, 0.2] : [0.04, 0.04, 0.05]))), 3));
+    geo.setAttribute('aLit', new THREE.InstancedBufferAttribute(new Float32Array(n).fill(0.9), 1)); // cabins lit: they're out for the evening
+    geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(these.map((l) => l.phase % 1)), 1));
+    const mesh = new THREE.InstancedMesh(geo, material, n);
+    mesh.frustumCulled = false; // instances move; there are only a handful
+    group.add(mesh);
+    meshes.push({ mesh, loops: these });
+  }
+  // Five lights per boat: port, starboard, masthead, stern, and a soft cabin glow.
+  const COLORS = [[6, 0.35, 0.18], [0.3, 5, 1.4], [4.2, 4.2, 4], [3.2, 3.2, 3], [2.4, 1.5, 0.7]];
+  const SIZES = [0.32, 0.32, 0.35, 0.3, 0.9];
+  const all = meshes.flatMap((g) => g.loops);
+  const points = createLightPoints(all.flatMap(() => COLORS.map((color, k) => ({ p: [0, -100, 0], color, size: SIZES[k] }))), uniforms);
+  group.add(points);
+  const lp = points.geometry.attributes.position;
+
+  const pose = (l, time) => {
+    // Angle round the ellipse; angular speed from the mean radius gives roughly the given speed.
+    const th = l.phase * Math.PI * 2 + (l.dir * time * l.speed) / ((l.rx + l.ry) / 2);
+    const cr = Math.cos(l.rot), sr = Math.sin(l.rot);
+    const ex = l.rx * Math.cos(th), ey = l.ry * Math.sin(th);
+    const tx = -l.rx * Math.sin(th) * l.dir, ty = l.ry * Math.cos(th) * l.dir;
+    return { x: l.c[0] + ex * cr - ey * sr, y: l.c[1] + ex * sr + ey * cr, heading: Math.atan2(tx * sr + ty * cr, tx * cr - ty * sr) };
+  };
+  const update = (time) => {
+    let li = 0;
+    for (const { mesh, loops: these } of meshes) {
+      these.forEach((l, i) => {
+        const { x, y, heading } = pose(l, time);
+        const s = l.length / NOMINAL;
+        q.setFromAxisAngle(up, heading);
+        m.compose(pos.set(x, 0.1, -y), q, scl.set(s, s, s));
+        mesh.setMatrixAt(i, m);
+        const fx = Math.cos(heading), fy = Math.sin(heading), px = -fy, py = fx; // forward, port (left)
+        const at = (f, side, h) => [x + fx * f * l.length + px * side * l.length, h * s, -(y + fy * f * l.length + py * side * l.length)];
+        const cabinTop = l.type === 'cruiser' ? 2.7 : 1.9;
+        const spots = [at(0.25, 0.15, 1.5), at(0.25, -0.15, 1.5), at(0.02, 0, cabinTop + 0.6), at(-0.49, 0, 1.2), at(-0.05, 0, cabinTop - 0.6)];
+        for (const p of spots) lp.setXYZ(li++, p[0], p[1], p[2]);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    lp.needsUpdate = true;
+  };
+  update(0);
+  return { group, update };
 }
