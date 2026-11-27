@@ -93,6 +93,8 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   a prominent downtown tower → Journalism, another → Comms work.
   *Built (2026-11-21):* BC Place → /experience/, tallest downtown tower in frame → /journalism/, Harbour Centre →
   /about/, Science World → /comms/ until the first tool is published, then /tools/ (automatic).
+  *Changed (2026-11-25, Jacob):* the BC Place hotspot is removed; BC Place is scenery only and Experience is reached from
+  the nav. Three section cards remain (`src/data/hero-stops.ts`).
 - **Implementation (2026-11-21):** `src/components/Hero.astro` (poster `<picture>` + hotspot links + headline) loads
   `src/hero/` lazily: on first scroll/pointer/touch/key or ~4 s after load, so the 3D work stays out of the loading
   window (Lighthouse mobile 99). Posters in `src/assets/hero/` are rendered with `scripts/skyline-lookdev.html`
@@ -192,7 +194,12 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 
 ## Site structure (proposed)
 - `/` — cityscape hero, short intro, highlights.
-- `/experience` — timeline (see below).
+- `/experience` — timeline (see below). SkyTrain-map timeline (2026-11-25, branch `feature/experience-timeline`): roles are
+  stations, organizations are lines (BCI, EPS, Education) in TransLink-inspired colours (page-scoped tokens in
+  `src/styles/experience.css`, checked by `npm run check:experience-contrast`; no orange inside the timeline). One content
+  entry per station in `src/content/experience/` (`line`, `tags` with a strand, `current`, `interchange`; `draftHighlights`
+  render only in dev until Jacob approves them; years alone, e.g. `'2021'`, are allowed when months aren't known). Components in `src/components/experience/`; lane layout in
+  `src/lib/experience.ts`. The old "What I built" blocks are archived in `content-archive/experience/`.
 - `/journalism` — written stories, audio/podcasts, videos, data visualizations.
 - `/comms` — EPS work: Preparedness Series, short videos, social media designs.
 - `/tools` and `/tools/<slug>` — interactive tools Jacob builds later. Scaffold the section and a
@@ -201,13 +208,14 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
 - `/contact` — email (mailto: vanluvenjacob@gmail.com) + LinkedIn. No form backend.
 
 ## About Jacob (source of truth for copy)
-- Journalism and Communications, Kwantlen Polytechnic University (Surrey, B.C.); Certificate in Journalism, Langara College.
+- B.A. in Journalism and Communications, Kwantlen Polytechnic University (Surrey, B.C.), 2021–2025; Certificate in
+  Journalism, Langara College, 2020–2021.
 - Email: vanluvenjacob@gmail.com
 - LinkedIn: https://www.linkedin.com/in/jacob-van-luven-5a6773203/
 - GitHub: https://github.com/realjacobvanluven (repo: `jacobvanluven-site`, public)
 - Experience:
   - **BCI (British Columbia Investment Management Corp.)**, Vancouver — Client Success Specialist (contract, full-time), Dec 2025–present.
-  - **BCI** — Technology Governance and Business Continuity Planning Intern, Sep 2025–Dec 2025.
+  - **BCI**, Vancouver — Technology Governance and Business Continuity Planning Intern, Sep 2025–Dec 2025.
   - **BCI**, Victoria — Technology Research and Communications Co-op, Jan 2025–Apr 2025. Technology research,
     SME interviews, technical white papers, award nominations, intranet articles.
   - **BCI**, Victoria — Internal Stakeholder Engagement Co-op, Sep 2024–Dec 2024. Internal comms strategy,

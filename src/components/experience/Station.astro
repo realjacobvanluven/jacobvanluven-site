@@ -1,0 +1,152 @@
+---
+/**
+ * One station on the /experience timeline: the rail (decorative SVG tracks and the station marker) and the card.
+ * Works with JS off: the card uses native <details>, and every track is drawn by default.
+ */
+import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
+import { lines } from '../../content.config';
+import { formatYearMonth } from '../../lib/format';
+import { lineChips, strandNames, type Segment, type Station } from '../../lib/experience';
+
+interface Props {
+  station: Station;
+  Content: AstroComponentFactory;
+  segments: Segment[];
+  /** Position in the list, for the single mobile rail. */
+  first: boolean;
+  last: boolean;
+}
+
+const { station, Content, segments, first, last } = Astro.props;
+const d = station.data;
+const id = `station-${station.id}`;
+const dev = import.meta.env.DEV;
+const strands = [...new Set(d.tags.map((t) => t.strand))];
+const hasBody = Boolean(station.body?.trim());
+const hasDetails = hasBody || d.highlights.length > 0 || d.tags.length > 0 || (dev && d.draftHighlights.length > 0);
+
+// Desktop: one parallel lane per line. The station marker sits on its own lane, or spans both lanes at an interchange.
+const laneCount = lines.length;
+const laneX = (line: Segment['line']) => `${((lines.indexOf(line) + 0.5) / laneCount) * 100}%`;
+const stopLanes = segments.filter((s) => s.station).map((s) => lines.indexOf(s.line));
+const laneFrom = Math.min(...stopLanes);
+const laneSpan = Math.max(...stopLanes) - laneFrom;
+// Track ends are in em (the SVG's font-size is 1rem) so they meet the marker at --station-y.
+const STATION_Y = '1.75em';
+---
+
+<li
+  class:list={['station', { 'is-current': d.current, 'is-interchange': d.interchange }]}
+  data-line={d.line}
+  data-strands={strands.join(' ')}
+>
+  <div class="year" aria-hidden="true">
+    {d.start && <span>{d.start.slice(0, 4)}</span>}
+  </div>
+
+  <div class="rail" aria-hidden="true">
+    <svg class="tracks tracks-wide" width="100%" height="100%" focusable="false">
+      {
+        segments.map((s) => (
+          <line
+            class:list={['track', { 'is-own': s.line === d.line || s.station, 'is-stub': !s.bottom }]}
+            data-line={s.line}
+            x1={laneX(s.line)}
+            x2={laneX(s.line)}
+            y1={s.top ? '0' : STATION_Y}
+            y2={s.bottom ? '100%' : STATION_Y}
+            pathLength="1"
+          />
+        ))
+      }
+    </svg>
+    <svg class="tracks tracks-narrow" width="100%" height="100%" focusable="false">
+      {
+        !(first && last) && (
+          <line
+            class:list={['track is-own', { 'is-stub': last }]}
+            data-line={d.line}
+            x1="50%"
+            x2="50%"
+            y1={first ? STATION_Y : '0'}
+            y2={last ? STATION_Y : '100%'}
+            pathLength="1"
+          />
+        )
+      }
+    </svg>
+    <span class="marker" style={`--lane: ${laneFrom}; --span: ${laneSpan}`}></span>
+  </div>
+
+  <article class="card" aria-labelledby={id}>
+    <div class="topline">
+      <ul class="chips">
+        <li class="chip chip-line">{lineChips[d.line]}</li>
+        {d.current && <li class="chip chip-here">You are here</li>}
+        {d.interchange && <li class="chip chip-interchange">Interchange with {lineChips[d.interchange]}</li>}
+      </ul>
+      {
+        d.start && (
+          <p class="when">
+            <time datetime={d.start}>{formatYearMonth(d.start)}</time> –{' '}
+            {d.end && d.end !== 'present' ? <time datetime={d.end}>{formatYearMonth(d.end)}</time> : 'Present'}
+          </p>
+        )
+      }
+    </div>
+    {dev && !d.start && <p class="todo">TODO(Jacob): dates for {d.org} (hidden until set).</p>}
+
+    <h2 id={id}>{d.role}</h2>
+    <p class="org">
+      {d.orgUrl ? <a href={d.orgUrl}>{d.org}</a> : d.org}
+      {d.location && ` · ${d.location}`}
+      {d.mode && ` (${d.mode})`}
+    </p>
+    {d.type && <p class="type">{d.type}</p>}
+    {d.summary && <p class="summary">{d.summary}</p>}
+
+    {
+      hasDetails && (
+        <details open={d.current}>
+          <summary>
+            Details<span class="visually-hidden">: {d.role}</span>
+          </summary>
+          <div class="details-body">
+            {d.highlights.length > 0 && (
+              <ul class="highlights">
+                {d.highlights.map((h) => (
+                  <li>{h}</li>
+                ))}
+              </ul>
+            )}
+            {dev && d.draftHighlights.length > 0 && (
+              <div class="todo">
+                DRAFT bullets, not shown in production until Jacob approves them:
+                <ul>
+                  {d.draftHighlights.map((h) => (
+                    <li>{h}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {hasBody && (
+              <div class="prose">
+                <Content />
+              </div>
+            )}
+            {d.tags.length > 0 && (
+              <ul class="tags">
+                {d.tags.map((t) => (
+                  <li class="tag" data-strand={t.strand}>
+                    {t.label}
+                    <span class="visually-hidden"> ({strandNames[t.strand]})</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </details>
+      )
+    }
+  </article>
+</li>

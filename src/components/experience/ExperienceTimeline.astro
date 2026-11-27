@@ -1,0 +1,173 @@
+---
+/**
+ * The /experience SkyTrain-map timeline: roles are stations, organizations are lines (plus education).
+ * Complete and readable with JS off. Styles and colour tokens: src/styles/experience.css.
+ */
+import { render } from 'astro:content';
+import '../../styles/experience.css';
+import { strands } from '../../content.config';
+import { buildRail, strandNames, type Station as StationEntry } from '../../lib/experience';
+import LineLegend from './LineLegend.astro';
+import Station from './Station.astro';
+
+interface Props {
+  stations: StationEntry[];
+}
+
+const { stations } = Astro.props;
+const rail = buildRail(stations);
+const rendered = await Promise.all(stations.map(async (s) => (await render(s)).Content));
+---
+
+<div class="xp" data-timeline>
+  <div class="map-key">
+    <LineLegend />
+    <div class="filters" data-filters hidden>
+      <p class="legend-title" id="strand-title">Strands</p>
+      <div class="filter-buttons" role="group" aria-labelledby="strand-title">
+        {
+          strands.map((s) => (
+            <button type="button" class="filter" data-strand={s} aria-pressed="false">
+              {strandNames[s]}
+            </button>
+          ))
+        }
+        <button type="button" class="filter filter-reset" data-reset>Show all</button>
+      </div>
+    </div>
+    <p class="filter-status" aria-live="polite" data-status></p>
+  </div>
+
+  <ol class="stations">
+    {
+      stations.map((s, i) => (
+        <Station
+          station={s}
+          Content={rendered[i]}
+          segments={rail[i]}
+          first={i === 0}
+          last={i === stations.length - 1}
+        />
+      ))
+    }
+  </ol>
+</div>
+
+<script>
+  // Progressive enhancement only: with JS off the timeline is complete (lines drawn, native <details>).
+  const root = document.querySelector<HTMLElement>('[data-timeline]');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+  if (root) {
+    const stations = [...root.querySelectorAll<HTMLElement>('.station')];
+
+    // Scroll-drawn lines: CSS scroll-driven animations where supported, otherwise draw each row as it enters.
+    if (!reduce.matches && !CSS.supports('animation-timeline: view()') && 'IntersectionObserver' in window) {
+      root.classList.add('xp-io');
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          // Draw this row and every row above it (a jump to the bottom shouldn't leave gaps in the line).
+          for (const s of stations.slice(0, stations.indexOf(e.target as HTMLElement) + 1)) {
+            s.classList.add('is-drawn');
+            io.unobserve(s);
+          }
+        }
+      });
+      stations.forEach((s) => io.observe(s));
+    }
+
+    // Smooth height for <details>; native toggle when motion is reduced.
+    for (const details of root.querySelectorAll('details')) {
+      const body = details.querySelector<HTMLElement>('.details-body');
+      let anim: Animation | null = null;
+      let opening = false;
+      details.querySelector('summary')?.addEventListener('click', (e) => {
+        if (reduce.matches || !body) return;
+        e.preventDefault();
+        // A click mid-animation reverses it.
+        const closing = anim ? opening : details.open;
+        opening = !closing;
+        const from = body.offsetHeight;
+        anim?.cancel();
+        details.open = true;
+        const to = closing ? 0 : body.scrollHeight;
+        anim = body.animate({ height: [`${from}px`, `${to}px`] }, { duration: 240, easing: 'ease-out' });
+        anim.onfinish = () => {
+          if (closing) details.open = false;
+          anim = null;
+        };
+      });
+    }
+
+    // Filters: one strand and/or one line at a time; dimmed stations stay readable and focusable.
+    const filters = root.querySelector<HTMLElement>('[data-filters]');
+    const status = root.querySelector<HTMLElement>('[data-status]');
+    const strandButtons = [...root.querySelectorAll<HTMLButtonElement>('button[data-strand]')];
+    const lineButtons = [...root.querySelectorAll<HTMLElement>('span.legend-item')].map((span) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'legend-item';
+      b.dataset.line = span.dataset.line;
+      b.setAttribute('aria-pressed', 'false');
+      b.append(...span.childNodes);
+      span.replaceWith(b);
+      return b;
+    });
+    if (filters) filters.hidden = false;
+
+    let strand: string | null = null;
+    let line: string | null = null;
+    // Cards the strand filter opened (so its matching tags show); closed again when they stop matching.
+    const opened = new Set<HTMLDetailsElement>();
+
+    const apply = (announce: boolean) => {
+      let matches = 0;
+      for (const s of stations) {
+        const match =
+          (!strand || (s.dataset.strands ?? '').split(' ').includes(strand)) && (!line || s.dataset.line === line);
+        if (match) matches++;
+        s.classList.toggle('is-dim', !match);
+        s.querySelectorAll<HTMLElement>('.tag').forEach((t) =>
+          t.classList.toggle('is-match', t.dataset.strand === strand),
+        );
+        const details = s.querySelector('details');
+        if (!details) continue;
+        if (strand && match && !details.open) {
+          details.open = true;
+          opened.add(details);
+        } else if (opened.has(details) && !(strand && match)) {
+          details.open = false;
+          opened.delete(details);
+        }
+      }
+      strandButtons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.strand === strand)));
+      lineButtons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.line === line)));
+      if (!status || !announce) return;
+      const strandName = strandButtons.find((b) => b.dataset.strand === strand)?.textContent?.trim();
+      const lineName = lineButtons.find((b) => b.dataset.line === line)?.textContent?.trim();
+      const total = stations.length;
+      status.textContent =
+        strand || line
+          ? `${matches} of ${total} stations${strandName ? ` match ${strandName}` : ''}${lineName ? ` on the ${lineName} line` : ''}`
+          : `Showing all ${total} stations`;
+    };
+
+    strandButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        strand = strand === b.dataset.strand ? null : (b.dataset.strand ?? null);
+        apply(true);
+      }),
+    );
+    lineButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        line = line === b.dataset.line ? null : (b.dataset.line ?? null);
+        apply(true);
+      }),
+    );
+    root.querySelector('[data-reset]')?.addEventListener('click', () => {
+      strand = line = null;
+      apply(true);
+    });
+  }
+</script>
