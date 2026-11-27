@@ -115,7 +115,11 @@ const angleDiff = (a, b) => ((a - b + 540) % 360) - 180;
 export async function createSkylineScene({ canvas, width, height, layout = 'desktop', tier, dataUrl = '/data/skyline.json', terrain = 'dem', maxPixelRatio = Infinity, devicePixelRatio, preserveDrawingBuffer = false, cameraHeight = CAMERA_HEIGHT, pitchOffset = 0 }) {
   const detail = SCENE_DETAIL[layout];
   let framing = framingFor(width / height);
-  let tierName = tier ?? (layout === 'phone' ? 'medium' : 'high');
+  // Devices that say they're low on memory (Chrome's deviceMemory ≤ 2 GB) or that ask to save data start at "low" (no bloom,
+  // fewer lights); everyone else starts high/medium and adaptive quality (runtime.js) steps down if the frame rate sags.
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  const lowPower = (nav.deviceMemory !== undefined && nav.deviceMemory <= 2) || nav.connection?.saveData === true;
+  let tierName = tier ?? (lowPower ? 'low' : layout === 'phone' ? 'medium' : 'high');
   let q = TIERS[tierName];
   const timings = {};
   const t0 = performance.now();
