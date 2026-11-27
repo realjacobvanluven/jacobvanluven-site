@@ -14,7 +14,7 @@ confident, no begging calls-to-action.
 His differentiator: **a journalist and communicator who builds.** He translates between business users and
 development teams, turns complex technology into clear stories, and ships his own tools with AI-assisted
 development. Every page should reinforce that blend of storytelling + business + building.
-Headline (decided 2026-11-21): "I translate between business and tech — and build the tools to prove it." with the subheading "Clear stories. Working tools." Original options were:
+Headline (changed 2026-11-26, Jacob): "Writer and tool builder based in Vancouver, with a soft spot for food and sports." with the subheading "Check out my portfolio." (was "I translate between business and tech — and build the tools to prove it." / "Clear stories. Working tools.", decided 2026-11-21). Original options were:
 - "I translate between business and tech — and build the tools to prove it."
 - "Journalist by training. Builder by habit. Translator between business and tech."
 - "Clear stories. Working tools."
@@ -181,8 +181,8 @@ A realistic, interactive 3D Vancouver skyline that also works as navigation.
   Still approximate: Sea Village houseboats and the ferry docks are not hand-modelled; large unmapped patches of the south bank
   (parks/lots with no OSM buildings) are plain dark ground. Hero download is ~594 KB gzipped (budget 700).
 - **Name (2026-11-21):** the hero leads with "Jacob Van Luven" as the h1: Unbounded 800, uppercase, an orange
-  stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. A one-line summary sits under it
-  (`summary` prop in `src/pages/index.astro`), then the headline and subheading.
+  stacked-shadow extrusion that follows the cursor, plus a slow highlight sweep. The headline and subheading sit
+  directly under it (the one-line summary was removed 2026-11-26 at Jacob's request).
 - **Scroll (decided 2026-11-21):** one scroll is enough. The first scroll (or Tab / "Skip to work") swaps the headline
   for all four section cards at once; hovering or focusing a card turns the camera to its landmark. No multi-screen tour.
 - **Mobile:** device-tilt parallax (with the iOS permission prompt handled gracefully), tap hotspots,
